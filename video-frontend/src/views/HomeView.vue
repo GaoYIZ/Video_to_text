@@ -1,432 +1,538 @@
 <template>
-  <div class="home-view">
-    <!-- 顶部导航 -->
-    <header class="header">
-      <div class="header-content">
-        <div class="logo" @click="$router.push('/')">
-          <el-icon :size="28" color="#1890ff"><VideoCamera /></el-icon>
-          <span>AI语音转写</span>
-        </div>
-        <nav class="nav-menu">
-          <el-button text @click="$router.push('/')" :class="{active: $route.path === '/'}">首页</el-button>
-          <el-button text @click="$router.push('/history')" :class="{active: $route.path === '/history'}">历史记录</el-button>
-        </nav>
-      </div>
-    </header>
+  <div class="home-page">
+    <!-- 页面标题 -->
+    <div class="page-header">
+      <h1>AI 视频助手</h1>
+      <p>智能语音转写 · AI 内容总结 · 多格式支持</p>
+    </div>
 
-    <!-- Banner区域 -->
-    <section class="banner">
-      <div class="banner-content">
-        <h1>AI 智能语音转文字</h1>
-        <p class="subtitle">支持视频/音频文件上传、链接解析,自动生成智能总结</p>
-        <div class="features">
-          <div class="feature-item">
-            <el-icon :size="24"><CircleCheck /></el-icon>
-            <span>准确率高达 98%</span>
-          </div>
-          <div class="feature-item">
-            <el-icon :size="24"><CircleCheck /></el-icon>
-            <span>支持多种格式</span>
-          </div>
-          <div class="feature-item">
-            <el-icon :size="24"><CircleCheck /></el-icon>
-            <span>AI 智能总结</span>
-          </div>
+    <!-- 核心功能金刚区 -->
+    <section class="function-cards">
+      <!-- 卡片1: 提取链接视频 -->
+      <el-card class="func-card link-card" shadow="hover" @click="showLinkDialog = true">
+        <div class="card-icon">
+          <el-icon :size="48" color="#1890ff"><Link /></el-icon>
         </div>
-      </div>
+        <h3>提取链接视频</h3>
+        <p>支持 YouTube/B站/抖音等平台</p>
+        <el-tag size="small" effect="plain">在线解析</el-tag>
+      </el-card>
+
+      <!-- 卡片2: 提取本地视频 (核心) -->
+      <el-card class="func-card video-card featured" shadow="hover" @click="triggerFileInput('video')">
+        <div class="card-badge">推荐</div>
+        <div class="card-icon">
+          <el-icon :size="56" color="#fff"><VideoCamera /></el-icon>
+        </div>
+        <h3>提取本地视频</h3>
+        <p>上传 MP4/MOV/AVI 等格式</p>
+        <el-tag size="small" type="danger" effect="dark">核心功能</el-tag>
+      </el-card>
+
+      <!-- 卡片3: 提取音频文件 -->
+      <el-card class="func-card audio-card" shadow="hover" @click="triggerFileInput('audio')">
+        <div class="card-icon">
+          <el-icon :size="48" color="#13c2c2"><Headset /></el-icon>
+        </div>
+        <h3>提取音频文件</h3>
+        <p>支持 MP3/WAV/M4A 等格式</p>
+        <el-tag size="small" type="success" effect="plain">快速转写</el-tag>
+      </el-card>
     </section>
 
-    <!-- 核心功能区 -->
-    <section class="main-section">
-      <div class="container">
-        <h2 class="section-title">选择转写方式</h2>
-        
-        <div class="upload-cards">
-          <!-- 卡片1: 机器快转 -->
-          <el-card class="upload-card" shadow="hover" @click="$router.push('/upload-audio')">
-            <div class="card-badge">推荐</div>
-            <div class="card-icon-wrapper">
-              <el-icon :size="56" color="#1890ff"><Headset /></el-icon>
-            </div>
-            <h3>上传音频</h3>
-            <p class="card-desc">直接上传音频文件,快速转写</p>
-            <ul class="card-features">
-              <li><el-icon><Check /></el-icon> 支持 mp3/wav/m4a 等格式</li>
-              <li><el-icon><Check /></el-icon> 转写速度快 3-5 倍</li>
-              <li><el-icon><Check /></el-icon> 节省流量和时间</li>
-            </ul>
-            <el-button type="primary" size="large" class="card-btn">
-              立即上传
-            </el-button>
-          </el-card>
+    <!-- 隐藏的文件输入 -->
+    <input
+      ref="fileInputRef"
+      type="file"
+      accept=".mp4,.mov,.avi,.wmv,.flv,.mkv"
+      style="display: none"
+      @change="handleVideoUpload"
+    />
+    <input
+      ref="audioInputRef"
+      type="file"
+      accept=".mp3,.wav,.m4a,.aac,.flac,.wma"
+      style="display: none"
+      @change="handleAudioUpload"
+    />
 
-          <!-- 卡片2: 上传视频 -->
-          <el-card class="upload-card" shadow="hover" @click="$router.push('/upload-video')">
-            <div class="card-icon-wrapper">
-              <el-icon :size="56" color="#52c41a"><VideoCamera /></el-icon>
-            </div>
-            <h3>上传视频</h3>
-            <p class="card-desc">上传视频文件,自动提取音频</p>
-            <ul class="card-features">
-              <li><el-icon><Check /></el-icon> 支持 mp4/avi/mov 等格式</li>
-              <li><el-icon><Check /></el-icon> 自动转换音频</li>
-              <li><el-icon><Check /></el-icon> 保留原始视频</li>
-            </ul>
-            <el-button type="success" size="large" class="card-btn">
-              立即上传
-            </el-button>
-          </el-card>
+    <!-- 链接解析对话框 -->
+    <el-dialog
+      v-model="showLinkDialog"
+      title="解析视频链接"
+      width="500px"
+      :close-on-click-modal="false"
+    >
+      <el-input
+        v-model="videoUrl"
+        placeholder="粘贴视频链接,如: https://www.bilibili.com/video/BV1xx"
+        size="large"
+        clearable
+      >
+        <template #prefix>
+          <el-icon><Link /></el-icon>
+        </template>
+      </el-input>
 
-          <!-- 卡片3: 链接解析 -->
-          <el-card class="upload-card" shadow="hover" @click="$router.push('/parse-url')">
-            <div class="card-icon-wrapper">
-              <el-icon :size="56" color="#faad14"><Link /></el-icon>
+      <div class="supported-platforms">
+        <p>支持的平台:</p>
+        <el-space wrap>
+          <el-tag effect="plain">Bilibili</el-tag>
+          <el-tag effect="plain">YouTube</el-tag>
+          <el-tag effect="plain">抖音</el-tag>
+          <el-tag effect="plain">快手</el-tag>
+        </el-space>
+      </div>
+
+      <template #footer>
+        <el-button @click="showLinkDialog = false">取消</el-button>
+        <el-button type="primary" :loading="parsing" @click="handleParseUrl">
+          开始解析
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 最近文件列表 -->
+    <section class="recent-files" v-if="recentList.length > 0">
+      <div class="section-header">
+        <h2>最近文件</h2>
+        <el-button text @click="$router.push('/history')">
+          查看全部
+          <el-icon><ArrowRight /></el-icon>
+        </el-button>
+      </div>
+
+      <div class="file-grid">
+        <el-card 
+          v-for="file in recentList" 
+          :key="file.id"
+          class="file-card"
+          shadow="hover"
+          @click="viewFile(file.id)"
+        >
+          <div class="file-status" :class="file.status"></div>
+          
+          <div class="file-info">
+            <h4 class="file-name">{{ file.originalName }}</h4>
+            <p class="file-summary">{{ file.summary ? file.summary.substring(0, 60) + '...' : '等待处理...' }}</p>
+            
+            <div class="file-meta">
+              <span class="meta-item">
+                <el-icon><Clock /></el-icon>
+                {{ formatTime(file.createTime) }}
+              </span>
+              <span class="meta-item">
+                <el-icon><Timer /></el-icon>
+                {{ file.duration || '--:--' }}
+              </span>
             </div>
-            <h3>解析链接</h3>
-            <p class="card-desc">粘贴视频链接,自动下载转写</p>
-            <ul class="card-features">
-              <li><el-icon><Check /></el-icon> 支持 B站/YouTube 等</li>
-              <li><el-icon><Check /></el-icon> 无需手动下载</li>
-              <li><el-icon><Check /></el-icon> 移动端友好</li>
-            </ul>
-            <el-button type="warning" size="large" class="card-btn">
-              立即解析
-            </el-button>
-          </el-card>
-        </div>
+          </div>
+
+          <div class="file-actions">
+            <el-dropdown trigger="click" @click.stop>
+              <el-button text size="small">
+                <el-icon><More /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item @click="viewFile(file.id)">
+                    <el-icon><View /></el-icon>
+                    查看详情
+                  </el-dropdown-item>
+                  <el-dropdown-item divided>
+                    <el-icon><Delete /></el-icon>
+                    删除
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </div>
+        </el-card>
       </div>
     </section>
-
-    <!-- 使用流程 -->
-    <section class="process-section">
-      <div class="container">
-        <h2 class="section-title">使用流程</h2>
-        <div class="process-steps">
-          <div class="step-item">
-            <div class="step-number">1</div>
-            <h4>上传文件</h4>
-            <p>选择音频/视频文件或粘贴链接</p>
-          </div>
-          <div class="step-arrow">
-            <el-icon><ArrowRight /></el-icon>
-          </div>
-          <div class="step-item">
-            <div class="step-number">2</div>
-            <h4>AI 转写</h4>
-            <p>智能识别语音并转为文字</p>
-          </div>
-          <div class="step-arrow">
-            <el-icon><ArrowRight /></el-icon>
-          </div>
-          <div class="step-item">
-            <div class="step-number">3</div>
-            <h4>生成总结</h4>
-            <p>AI 自动提炼核心要点</p>
-          </div>
-          <div class="step-arrow">
-            <el-icon><ArrowRight /></el-icon>
-          </div>
-          <div class="step-item">
-            <div class="step-number">4</div>
-            <h4>查看结果</h4>
-            <p>在线阅读或下载文本</p>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 底部 -->
-    <footer class="footer">
-      <div class="container">
-        <p>© 2026 AI语音转写系统 | 基于 Whisper + LangChain + OpenAI</p>
-      </div>
-    </footer>
   </div>
 </template>
 
 <script setup>
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { parseVideoUrl, uploadVideoFile, uploadAudioFile, convertToAudio, processWithAi, getHistoryList } from '../api/video'
+
+const router = useRouter()
+const showLinkDialog = ref(false)
+const videoUrl = ref('')
+const parsing = ref(false)
+const fileInputRef = ref(null)
+const audioInputRef = ref(null)
+const recentList = ref([])
+
+// 触发文件选择
+const triggerFileInput = (type) => {
+  if (type === 'video') {
+    fileInputRef.value?.click()
+  } else {
+    audioInputRef.value?.click()
+  }
+}
+
+// 处理视频上传
+const handleVideoUpload = async (event) => {
+  const file = event.target.files[0]
+  if (!file) return
+
+  try {
+    ElMessage.info('开始上传视频...')
+    
+    // 上传视频
+    const uploadRes = await uploadVideoFile(file)
+    if (uploadRes.code !== 200) {
+      throw new Error(uploadRes.message)
+    }
+
+    const videoId = uploadRes.data.id
+    ElMessage.success('上传成功,开始转换...')
+
+    // 转换音频
+    await convertToAudio(videoId)
+    ElMessage.success('转换完成,开始 AI 分析...')
+
+    // AI 处理
+    await processWithAi(videoId)
+    ElMessage.success('处理完成!')
+
+    // 刷新列表
+    await fetchRecentFiles()
+    
+    // 跳转到结果页
+    router.push(`/result/${videoId}`)
+
+  } catch (error) {
+    console.error('处理失败:', error)
+    ElMessage.error(error.message || '处理失败')
+  } finally {
+    event.target.value = ''
+  }
+}
+
+// 处理音频上传
+const handleAudioUpload = async (event) => {
+  const file = event.target.files[0]
+  if (!file) return
+
+  try {
+    ElMessage.info('开始上传音频...')
+    
+    // 上传音频
+    const uploadRes = await uploadAudioFile(file)
+    if (uploadRes.code !== 200) {
+      throw new Error(uploadRes.message)
+    }
+
+    const videoId = uploadRes.data.id
+    ElMessage.success('上传成功,开始 AI 分析...')
+
+    // AI 处理
+    await processWithAi(videoId)
+    ElMessage.success('处理完成!')
+
+    // 刷新列表
+    await fetchRecentFiles()
+    
+    // 跳转到结果页
+    router.push(`/result/${videoId}`)
+
+  } catch (error) {
+    console.error('处理失败:', error)
+    ElMessage.error(error.message || '处理失败')
+  } finally {
+    event.target.value = ''
+  }
+}
+
+// 解析链接
+const handleParseUrl = async () => {
+  if (!videoUrl.value) {
+    ElMessage.warning('请输入视频链接')
+    return
+  }
+
+  parsing.value = true
+  try {
+    const res = await parseVideoUrl(videoUrl.value)
+    if (res.code !== 200) {
+      throw new Error(res.message)
+    }
+
+    ElMessage.success('解析成功!')
+    showLinkDialog.value = false
+    videoUrl.value = ''
+    
+    // TODO: 后续实现完整的链接解析流程
+    
+  } catch (error) {
+    console.error('解析失败:', error)
+    ElMessage.error(error.message || '解析失败')
+  } finally {
+    parsing.value = false
+  }
+}
+
+// 查看文件
+const viewFile = (id) => {
+  router.push(`/result/${id}`)
+}
+
+// 获取最近文件
+const fetchRecentFiles = async () => {
+  try {
+    const res = await getHistoryList(1, 6)
+    if (res.code === 200) {
+      recentList.value = res.data.list || []
+    }
+  } catch (error) {
+    console.error('获取列表失败:', error)
+  }
+}
+
+// 格式化时间
+const formatTime = (time) => {
+  if (!time) return '-'
+  const date = new Date(time)
+  const now = new Date()
+  const diff = now - date
+  
+  if (diff < 60000) return '刚刚'
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`
+  return date.toLocaleDateString('zh-CN')
+}
+
+onMounted(() => {
+  fetchRecentFiles()
+})
 </script>
 
 <style scoped>
-.home-view {
-  min-height: 100vh;
-  background: #f0f2f5;
-}
-
-/* 头部 */
-.header {
-  background: #fff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-}
-
-.header-content {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 24px;
-  height: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.logo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 18px;
-  font-weight: 600;
-  color: #1890ff;
-  cursor: pointer;
-}
-
-.nav-menu {
-  display: flex;
-  gap: 8px;
-}
-
-.nav-menu .el-button {
-  color: #595959;
-}
-
-.nav-menu .el-button.active {
-  color: #1890ff;
-  font-weight: 500;
-}
-
-/* Banner */
-.banner {
-  background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
-  color: #fff;
-  padding: 80px 24px;
-  text-align: center;
-}
-
-.banner-content {
-  max-width: 800px;
-  margin: 0 auto;
-}
-
-.banner h1 {
-  font-size: 42px;
-  font-weight: 700;
-  margin: 0 0 16px;
-}
-
-.subtitle {
-  font-size: 18px;
-  opacity: 0.9;
-  margin: 0 0 32px;
-}
-
-.features {
-  display: flex;
-  justify-content: center;
-  gap: 32px;
-  flex-wrap: wrap;
-}
-
-.feature-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 15px;
-}
-
-/* 主内容区 */
-.main-section {
-  padding: 60px 24px;
-}
-
-.container {
+.home-page {
   max-width: 1200px;
   margin: 0 auto;
 }
 
-.section-title {
-  text-align: center;
+.page-header {
+  margin-bottom: 40px;
+}
+
+.page-header h1 {
   font-size: 32px;
-  font-weight: 600;
-  color: #262626;
-  margin: 0 0 48px;
-}
-
-.upload-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 24px;
-}
-
-.upload-card {
-  position: relative;
-  cursor: pointer;
-  transition: all 0.3s;
-  border-radius: 8px;
-  padding: 32px 24px;
-  text-align: center;
-}
-
-.upload-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-}
-
-.card-badge {
-  position: absolute;
-  top: -1px;
-  right: 24px;
-  background: #ff4d4f;
-  color: #fff;
-  padding: 4px 12px;
-  border-radius: 0 0 4px 4px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.card-icon-wrapper {
-  margin-bottom: 16px;
-}
-
-.upload-card h3 {
-  font-size: 20px;
-  font-weight: 600;
+  font-weight: 700;
   color: #262626;
   margin: 0 0 8px;
 }
 
-.card-desc {
-  color: #8c8c8c;
-  font-size: 14px;
-  margin: 0 0 20px;
-}
-
-.card-features {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 24px;
-  text-align: left;
-}
-
-.card-features li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 0;
-  color: #595959;
-  font-size: 14px;
-}
-
-.card-features .el-icon {
-  color: #52c41a;
-  font-size: 16px;
-}
-
-.card-btn {
-  width: 100%;
-}
-
-/* 流程区 */
-.process-section {
-  background: #fff;
-  padding: 60px 24px;
-}
-
-.process-steps {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.step-item {
-  text-align: center;
-  flex: 1;
-  min-width: 150px;
-  max-width: 200px;
-}
-
-.step-number {
-  width: 56px;
-  height: 56px;
-  background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
-  color: #fff;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  font-weight: 600;
-  margin: 0 auto 16px;
-}
-
-.step-item h4 {
-  font-size: 16px;
-  font-weight: 600;
-  color: #262626;
-  margin: 0 0 8px;
-}
-
-.step-item p {
-  font-size: 13px;
+.page-header p {
+  font-size: 15px;
   color: #8c8c8c;
   margin: 0;
 }
 
-.step-arrow {
-  color: #d9d9d9;
-  font-size: 24px;
+/* 功能卡片 */
+.function-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+  margin-bottom: 48px;
 }
 
-/* 底部 */
-.footer {
-  background: #001529;
-  color: rgba(255, 255, 255, 0.65);
-  padding: 24px;
+.func-card {
+  cursor: pointer;
+  transition: all 0.3s;
+  border-radius: 12px;
+  padding: 32px 24px;
   text-align: center;
-  font-size: 14px;
+  position: relative;
+  overflow: hidden;
 }
 
-/* 响应式 */
+.func-card:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+}
+
+.card-badge {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: linear-gradient(135deg, #C084FC 0%, #9333EA 100%);
+  color: #fff;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.card-icon {
+  margin-bottom: 16px;
+}
+
+.func-card h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #262626;
+  margin: 0 0 8px;
+}
+
+.func-card p {
+  font-size: 13px;
+  color: #8c8c8c;
+  margin: 0 0 12px;
+}
+
+/* 特色卡片 - 紫色渐变 */
+.video-card.featured {
+  background: linear-gradient(to bottom right, #C084FC, #9333EA);
+  color: #fff;
+}
+
+.video-card.featured h3,
+.video-card.featured p {
+  color: #fff;
+}
+
+.video-card.featured :deep(.el-tag) {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #fff;
+}
+
+/* 最近文件 */
+.recent-files {
+  margin-top: 40px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.section-header h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #262626;
+  margin: 0;
+}
+
+.file-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.file-card {
+  cursor: pointer;
+  transition: all 0.3s;
+  border-radius: 8px;
+  position: relative;
+}
+
+.file-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+.file-status {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  z-index: 1;
+}
+
+.file-status.completed {
+  background: #52c41a;
+  box-shadow: 0 0 8px rgba(82, 196, 26, 0.6);
+  animation: pulse 2s infinite;
+}
+
+.file-status.processing {
+  background: #ff4d4f;
+  box-shadow: 0 0 8px rgba(255, 77, 79, 0.6);
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.file-info {
+  padding: 8px 0;
+}
+
+.file-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #262626;
+  margin: 0 0 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-summary {
+  font-size: 13px;
+  color: #8c8c8c;
+  margin: 0 0 12px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.file-meta {
+  display: flex;
+  gap: 16px;
+}
+
+.meta-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #bfbfbf;
+}
+
+.file-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+.supported-platforms {
+  margin-top: 16px;
+  padding: 12px;
+  background: #fafafa;
+  border-radius: 6px;
+}
+
+.supported-platforms p {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #595959;
+}
+
 @media (max-width: 768px) {
-  .banner {
-    padding: 48px 16px;
-  }
-
-  .banner h1 {
-    font-size: 28px;
-  }
-
-  .subtitle {
-    font-size: 15px;
-  }
-
-  .features {
-    gap: 16px;
-  }
-
-  .main-section,
-  .process-section {
-    padding: 40px 16px;
-  }
-
-  .section-title {
-    font-size: 24px;
-    margin-bottom: 32px;
-  }
-
-  .upload-cards {
+  .function-cards {
     grid-template-columns: 1fr;
   }
 
-  .process-steps {
-    flex-direction: column;
-  }
-
-  .step-arrow {
-    transform: rotate(90deg);
+  .file-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>
