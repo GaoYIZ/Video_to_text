@@ -1,18 +1,14 @@
 <template>
-  <div class="result-container">
-    <el-card class="result-card" v-loading="loading">
-      <template #header>
-        <div class="card-header">
-          <el-button @click="goBack">
-            <el-icon><ArrowLeft /></el-icon>
-            返回
-          </el-button>
-          <span>视频总结报告</span>
-        </div>
+  <div class="result-view" v-loading="loading">
+    <el-page-header @back="goBack">
+      <template #content>
+        <span class="page-title">处理结果</span>
       </template>
+    </el-page-header>
 
-      <div v-if="videoInfo" class="content">
-        <!-- 基本信息 -->
+    <div class="content-wrapper" v-if="videoInfo">
+      <!-- 基本信息 -->
+      <el-card class="info-card">
         <el-descriptions title="基本信息" :column="2" border>
           <el-descriptions-item label="文件名">
             {{ videoInfo.originalName }}
@@ -26,42 +22,54 @@
             {{ formatTime(videoInfo.createTime) }}
           </el-descriptions-item>
         </el-descriptions>
+      </el-card>
 
-        <!-- 转录文本 -->
-        <div v-if="videoInfo.transcript" class="section">
-          <h3>
-            <el-icon><Document /></el-icon>
-            完整转录文本
-          </h3>
-          <el-input
-            type="textarea"
-            :rows="10"
-            :model-value="videoInfo.transcript"
-            readonly
-            class="transcript-box"
-          />
-        </div>
-
-        <!-- AI 总结 -->
-        <div v-if="videoInfo.summary" class="section">
-          <h3>
+      <!-- AI 总结 -->
+      <el-card v-if="videoInfo.summary" class="summary-card">
+        <template #header>
+          <div class="card-header">
             <el-icon><MagicStick /></el-icon>
-            AI 智能总结
-          </h3>
-          <div class="summary-content" v-html="formatSummary(videoInfo.summary)"></div>
-        </div>
+            <span>AI 智能总结</span>
+          </div>
+        </template>
+        <div class="summary-content" v-html="formatSummary(videoInfo.summary)"></div>
+      </el-card>
 
-        <!-- 空状态 -->
-        <el-empty 
-          v-if="!videoInfo.transcript && !videoInfo.summary"
-          description="暂无处理结果"
-        >
-          <el-button type="primary" @click="reprocess">
-            重新处理
-          </el-button>
-        </el-empty>
-      </div>
-    </el-card>
+      <!-- 转录文本 -->
+      <el-card v-if="videoInfo.transcript" class="transcript-card">
+        <template #header>
+          <div class="card-header">
+            <el-icon><Document /></el-icon>
+            <span>完整转录文本</span>
+            <el-button 
+              size="small" 
+              @click="copyTranscript"
+              style="margin-left: auto"
+            >
+              <el-icon><CopyDocument /></el-icon>
+              复制
+            </el-button>
+          </div>
+        </template>
+        <el-input
+          type="textarea"
+          :rows="15"
+          :model-value="videoInfo.transcript"
+          readonly
+          class="transcript-box"
+        />
+      </el-card>
+
+      <!-- 空状态 -->
+      <el-empty 
+        v-if="!videoInfo.transcript && !videoInfo.summary"
+        description="暂无处理结果"
+      >
+        <el-button type="primary" @click="reprocess">
+          重新处理
+        </el-button>
+      </el-empty>
+    </div>
   </div>
 </template>
 
@@ -76,7 +84,6 @@ const route = useRoute()
 const loading = ref(false)
 const videoInfo = ref(null)
 
-// 获取视频信息
 const fetchVideoInfo = async () => {
   const videoId = route.params.id
   if (!videoId) {
@@ -100,18 +107,15 @@ const fetchVideoInfo = async () => {
   }
 }
 
-// 重新处理
 const reprocess = async () => {
   if (!videoInfo.value) return
 
   loading.value = true
   try {
-    // 如果没有音频,先转换
     if (!videoInfo.value.audioPath) {
       await convertToAudio(videoInfo.value.id)
     }
     
-    // AI 处理
     await processWithAi(videoInfo.value.id)
     
     ElMessage.success('重新处理完成')
@@ -124,18 +128,22 @@ const reprocess = async () => {
   }
 }
 
-// 返回
 const goBack = () => {
   router.push('/')
 }
 
-// 格式化时间
+const copyTranscript = () => {
+  if (videoInfo.value?.transcript) {
+    navigator.clipboard.writeText(videoInfo.value.transcript)
+    ElMessage.success('已复制到剪贴板')
+  }
+}
+
 const formatTime = (time) => {
   if (!time) return '-'
   return new Date(time).toLocaleString('zh-CN')
 }
 
-// 获取状态类型
 const getStatusType = (status) => {
   const types = {
     'UPLOADED': 'info',
@@ -146,7 +154,6 @@ const getStatusType = (status) => {
   return types[status] || 'info'
 }
 
-// 获取状态文本
 const getStatusText = (status) => {
   const texts = {
     'UPLOADED': '已上传',
@@ -157,14 +164,10 @@ const getStatusText = (status) => {
   return texts[status] || status
 }
 
-// 格式化总结内容(简单处理 Markdown)
 const formatSummary = (text) => {
   if (!text) return ''
   
-  // 将换行转换为 <br>
   let formatted = text.replace(/\n/g, '<br>')
-  
-  // 加粗文本 **text** -> <strong>text</strong>
   formatted = formatted.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
   
   return formatted
@@ -176,51 +179,40 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.result-container {
+.result-view {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 20px;
+  background: #f5f7fa;
 }
 
-.result-card {
+.content-wrapper {
   max-width: 1000px;
-  margin: 0 auto;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  margin: 30px auto;
+  padding: 0 20px;
+}
+
+.page-title {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+.info-card {
+  margin-bottom: 20px;
 }
 
 .card-header {
   display: flex;
   align-items: center;
-  gap: 15px;
-  font-size: 18px;
+  gap: 8px;
   font-weight: bold;
 }
 
-.content {
-  padding: 10px;
-}
-
-.section {
-  margin-top: 30px;
-}
-
-.section h3 {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #303133;
-  margin-bottom: 15px;
-  font-size: 16px;
-}
-
-.transcript-box {
-  font-family: 'Courier New', monospace;
-  line-height: 1.6;
+.summary-card {
+  margin-bottom: 20px;
 }
 
 .summary-content {
   padding: 20px;
-  background: #f5f7fa;
+  background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
   border-radius: 8px;
   line-height: 1.8;
   color: #303133;
@@ -229,5 +221,25 @@ onMounted(() => {
 
 .summary-content :deep(strong) {
   color: #409EFF;
+}
+
+.transcript-card {
+  margin-bottom: 20px;
+}
+
+.transcript-box {
+  font-family: 'Courier New', monospace;
+  line-height: 1.6;
+}
+
+@media (max-width: 768px) {
+  .content-wrapper {
+    margin: 15px auto;
+    padding: 0 10px;
+  }
+
+  .summary-content {
+    padding: 15px;
+  }
 }
 </style>

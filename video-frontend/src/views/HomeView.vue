@@ -1,230 +1,227 @@
 <template>
-  <div class="home-container">
-    <el-card class="upload-card">
-      <template #header>
-        <div class="card-header">
-          <el-icon :size="24" color="#409EFF"><VideoCamera /></el-icon>
-          <span>视频智能总结系统</span>
-        </div>
-      </template>
+  <div class="home-view">
+    <!-- 头部 -->
+    <header class="header">
+      <div class="header-content">
+        <h1 class="logo">
+          <el-icon :size="32" color="#409EFF"><VideoCamera /></el-icon>
+          <span>视频智能总结</span>
+        </h1>
+        <el-button text @click="$router.push('/history')">
+          <el-icon><Clock /></el-icon>
+          历史记录
+        </el-button>
+      </div>
+    </header>
 
-      <!-- 上传区域 -->
-      <el-upload
-        ref="uploadRef"
-        class="upload-demo"
-        drag
-        :auto-upload="false"
-        :on-change="handleFileChange"
-        :limit="1"
-        accept=".mp4,.avi,.mov,.wmv,.flv,.mkv"
-      >
-        <el-icon class="el-icon--upload"><upload-filled /></el-icon>
-        <div class="el-upload__text">
-          拖拽视频到此处或 <em>点击上传</em>
-        </div>
-        <template #tip>
-          <div class="el-upload__tip">
-            支持 mp4/avi/mov/wmv/flv/mkv 格式,最大 500MB
+    <!-- 主要内容 -->
+    <main class="main-content">
+      <div class="feature-cards">
+        <!-- 功能卡片1: 解析链接 -->
+        <el-card class="feature-card" shadow="hover" @click="$router.push('/parse-url')">
+          <div class="card-icon">
+            <el-icon :size="48" color="#409EFF"><Link /></el-icon>
+          </div>
+          <h3>解析视频链接</h3>
+          <p>支持 B站、YouTube 等主流平台</p>
+          <el-tag type="primary" effect="plain">推荐</el-tag>
+        </el-card>
+
+        <!-- 功能卡片2: 上传视频 -->
+        <el-card class="feature-card" shadow="hover" @click="$router.push('/upload-video')">
+          <div class="card-icon">
+            <el-icon :size="48" color="#67C23A"><Upload /></el-icon>
+          </div>
+          <h3>上传本地视频</h3>
+          <p>支持 mp4/avi/mov 等格式</p>
+          <el-tag type="success" effect="plain">常用</el-tag>
+        </el-card>
+
+        <!-- 功能卡片3: 上传音频 -->
+        <el-card class="feature-card" shadow="hover" @click="$router.push('/upload-audio')">
+          <div class="card-icon">
+            <el-icon :size="48" color="#E6A23C"><Headset /></el-icon>
+          </div>
+          <h3>上传音频文件</h3>
+          <p>直接处理音频,更快更省流量</p>
+          <el-tag type="warning" effect="plain">快速</el-tag>
+        </el-card>
+      </div>
+
+      <!-- 使用说明 -->
+      <el-card class="tips-card" shadow="never">
+        <template #header>
+          <div class="tips-header">
+            <el-icon><InfoFilled /></el-icon>
+            <span>使用提示</span>
           </div>
         </template>
-      </el-upload>
-
-      <!-- 处理按钮 -->
-      <div v-if="selectedFile" class="action-area">
-        <el-button 
-          type="primary" 
-          size="large"
-          :loading="processing"
-          @click="handleProcess"
-        >
-          {{ processing ? '处理中...' : '开始处理' }}
-        </el-button>
-      </div>
-
-      <!-- 进度显示 -->
-      <div v-if="processing" class="progress-area">
-        <el-steps :active="currentStep" finish-status="success" align-center>
-          <el-step title="上传视频" />
-          <el-step title="转换音频" />
-          <el-step title="AI 分析" />
-          <el-step title="完成" />
-        </el-steps>
-
-        <el-progress 
-          v-if="currentStep === 0"
-          :percentage="uploadProgress" 
-          :status="uploadProgress === 100 ? 'success' : ''"
-        />
-        
-        <div class="step-info">
-          {{ stepText }}
+        <div class="tips-content">
+          <el-row :gutter="20">
+            <el-col :xs="24" :sm="8">
+              <div class="tip-item">
+                <strong>📱 移动端推荐</strong>
+                <p>先转换音频再上传,节省流量和时间</p>
+              </div>
+            </el-col>
+            <el-col :xs="24" :sm="8">
+              <div class="tip-item">
+                <strong>⚡ 处理速度</strong>
+                <p>音频文件比视频处理快 3-5 倍</p>
+              </div>
+            </el-col>
+            <el-col :xs="24" :sm="8">
+              <div class="tip-item">
+                <strong>💾 历史记录</strong>
+                <p>所有处理结果自动保存,随时查看</p>
+              </div>
+            </el-col>
+          </el-row>
         </div>
-      </div>
-
-      <!-- 结果预览 -->
-      <div v-if="videoInfo && !processing" class="result-preview">
-        <el-alert
-          title="处理完成!"
-          type="success"
-          :closable="false"
-          show-icon
-        />
-        <el-button 
-          type="success" 
-          size="large"
-          @click="viewResult"
-          style="margin-top: 15px"
-        >
-          查看总结报告
-        </el-button>
-      </div>
-    </el-card>
+      </el-card>
+    </main>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { uploadVideo, convertToAudio, processWithAi } from '../api/video'
-
-const router = useRouter()
-const uploadRef = ref(null)
-const selectedFile = ref(null)
-const processing = ref(false)
-const currentStep = ref(0)
-const uploadProgress = ref(0)
-const videoInfo = ref(null)
-
-const stepText = computed(() => {
-  const texts = [
-    '正在上传视频...',
-    '正在转换音频...',
-    'AI 正在分析内容...',
-    '处理完成!'
-  ]
-  return texts[currentStep.value] || ''
-})
-
-// 文件选择
-const handleFileChange = (file) => {
-  selectedFile.value = file.raw
-  videoInfo.value = null
-  currentStep.value = 0
-  uploadProgress.value = 0
-}
-
-// 处理视频
-const handleProcess = async () => {
-  if (!selectedFile.value) {
-    ElMessage.warning('请先选择视频文件')
-    return
-  }
-
-  processing.value = true
-  currentStep.value = 0
-  uploadProgress.value = 0
-
-  try {
-    // 步骤1: 上传视频
-    console.log('开始上传视频...')
-    const uploadRes = await uploadVideo(selectedFile.value, (progress) => {
-      uploadProgress.value = progress
-    })
-    
-    if (uploadRes.code !== 200) {
-      throw new Error(uploadRes.message || '上传失败')
-    }
-    
-    videoInfo.value = uploadRes.data
-    currentStep.value = 1
-    console.log('视频上传成功, ID:', videoInfo.value.id)
-
-    // 步骤2: 转换音频
-    console.log('开始转换音频...')
-    const convertRes = await convertToAudio(videoInfo.value.id)
-    if (convertRes.code !== 200) {
-      throw new Error(convertRes.message || '音频转换失败')
-    }
-    currentStep.value = 2
-    console.log('音频转换成功')
-
-    // 步骤3: AI 处理
-    console.log('开始 AI 处理...')
-    const aiRes = await processWithAi(videoInfo.value.id)
-    if (aiRes.code !== 200) {
-      throw new Error(aiRes.message || 'AI 处理失败')
-    }
-    currentStep.value = 3
-    console.log('AI 处理成功')
-
-    ElMessage.success('视频处理完成!')
-
-  } catch (error) {
-    console.error('处理失败:', error)
-    ElMessage.error(error.message || '处理失败,请重试')
-    processing.value = false
-  }
-}
-
-// 查看结果
-const viewResult = () => {
-  if (videoInfo.value && videoInfo.value.id) {
-    router.push(`/result/${videoInfo.value.id}`)
-  }
-}
 </script>
 
 <style scoped>
-.home-container {
+.home-view {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.header {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.header-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 15px 20px;
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
   align-items: center;
-  padding: 20px;
 }
 
-.upload-card {
-  width: 100%;
-  max-width: 700px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-}
-
-.card-header {
+.logo {
   display: flex;
   align-items: center;
   gap: 10px;
   font-size: 20px;
+  margin: 0;
+  color: #303133;
+}
+
+.main-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px 20px;
+}
+
+.feature-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 24px;
+  margin-bottom: 30px;
+}
+
+.feature-card {
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-align: center;
+  padding: 30px 20px;
+  border-radius: 12px;
+}
+
+.feature-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+}
+
+.card-icon {
+  margin-bottom: 15px;
+}
+
+.feature-card h3 {
+  font-size: 18px;
+  margin: 15px 0 10px;
+  color: #303133;
+}
+
+.feature-card p {
+  color: #909399;
+  font-size: 14px;
+  margin-bottom: 15px;
+}
+
+.tips-card {
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.tips-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-weight: bold;
   color: #303133;
 }
 
-.upload-demo {
-  margin: 20px 0;
+.tips-content {
+  padding: 10px 0;
 }
 
-.action-area {
-  text-align: center;
-  margin-top: 20px;
-}
-
-.progress-area {
-  margin-top: 30px;
-  padding: 20px;
+.tip-item {
+  padding: 15px;
   background: #f5f7fa;
   border-radius: 8px;
+  margin-bottom: 10px;
 }
 
-.step-info {
-  text-align: center;
-  margin-top: 15px;
-  font-size: 14px;
+.tip-item strong {
+  display: block;
+  margin-bottom: 5px;
+  color: #303133;
+}
+
+.tip-item p {
+  margin: 0;
   color: #606266;
+  font-size: 13px;
 }
 
-.result-preview {
-  margin-top: 20px;
-  text-align: center;
+/* 移动端适配 */
+@media (max-width: 768px) {
+  .header-content {
+    padding: 12px 15px;
+  }
+
+  .logo {
+    font-size: 16px;
+  }
+
+  .logo .el-icon {
+    font-size: 24px !important;
+  }
+
+  .main-content {
+    padding: 20px 15px;
+  }
+
+  .feature-cards {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+
+  .feature-card {
+    padding: 20px 15px;
+  }
 }
 </style>
