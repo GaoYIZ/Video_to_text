@@ -1,68 +1,116 @@
 <template>
-  <div class="history-view">
-    <el-page-header @back="$router.push('/')">
-      <template #content>
-        <span class="page-title">历史记录</span>
-      </template>
-    </el-page-header>
+  <div class="history-page">
+    <div class="page-header">
+      <h2>历史记录</h2>
+      <p>共 {{ total }} 个文件</p>
+    </div>
 
-    <div class="content-wrapper">
-      <el-card>
-        <div v-if="loading" class="loading-box">
-          <el-skeleton :rows="5" animated />
-        </div>
+    <div class="filter-bar">
+      <el-input
+        v-model="searchKeyword"
+        placeholder="搜索文件名..."
+        clearable
+        style="width: 300px"
+        @input="handleSearch"
+      >
+        <template #prefix>
+          <el-icon><Search /></el-icon>
+        </template>
+      </el-input>
 
-        <el-empty v-else-if="historyList.length === 0" description="暂无历史记录">
-          <el-button type="primary" @click="$router.push('/')">
-            去处理视频
-          </el-button>
-        </el-empty>
+      <el-select 
+        v-model="statusFilter" 
+        placeholder="状态筛选" 
+        clearable
+        style="width: 150px"
+        @change="handleFilter"
+      >
+        <el-option label="全部" value="" />
+        <el-option label="已完成" value="SUMMARIZED" />
+        <el-option label="处理中" value="PROCESSING" />
+        <el-option label="已上传" value="UPLOADED" />
+      </el-select>
 
-        <div v-else class="history-list">
-          <el-card 
-            v-for="item in historyList" 
-            :key="item.id"
-            class="history-item"
-            shadow="hover"
-            @click="viewDetail(item.id)"
-          >
-            <div class="item-header">
-              <h4 class="item-title">{{ item.originalName }}</h4>
-              <el-tag :type="getStatusType(item.status)" size="small">
-                {{ getStatusText(item.status) }}
-              </el-tag>
-            </div>
-            
-            <div class="item-info">
-              <span class="info-text">
-                <el-icon><Clock /></el-icon>
-                {{ formatTime(item.createTime) }}
-              </span>
-              <span v-if="item.summary" class="info-text">
-                <el-icon><Document /></el-icon>
-                已生成总结
-              </span>
-            </div>
+      <el-button type="danger" text @click="clearAll" :disabled="historyList.length === 0">
+        <el-icon><Delete /></el-icon>
+        清空全部
+      </el-button>
+    </div>
 
-            <div class="item-actions">
-              <el-button size="small" type="primary" text>
-                查看详情
-              </el-button>
-            </div>
-          </el-card>
+    <div v-loading="loading" class="history-list">
+      <el-empty v-if="!loading && historyList.length === 0" description="暂无历史记录">
+        <el-button type="primary" @click="$router.push('/')">
+          去处理视频
+        </el-button>
+      </el-empty>
 
-          <!-- 分页 -->
-          <div class="pagination-box">
-            <el-pagination
-              v-model:current-page="currentPage"
-              :page-size="pageSize"
-              :total="total"
-              layout="prev, pager, next"
-              @current-change="handlePageChange"
-            />
+      <div v-else class="file-grid">
+        <el-card 
+          v-for="file in historyList" 
+          :key="file.id"
+          class="history-item"
+          shadow="hover"
+          @click="viewDetail(file.id)"
+        >
+          <div class="item-status" :class="file.status?.toLowerCase()">
+            <div class="status-dot"></div>
           </div>
-        </div>
-      </el-card>
+
+          <div class="item-content">
+            <h4 class="item-title">{{ file.originalName }}</h4>
+            
+            <p class="item-summary">
+              {{ file.summary ? file.summary.substring(0, 80) + '...' : '等待 AI 处理...' }}
+            </p>
+
+            <div class="item-meta">
+              <span class="meta-item">
+                <el-icon><Clock /></el-icon>
+                {{ formatTime(file.createTime) }}
+              </span>
+              <span class="meta-item" v-if="file.summary">
+                <el-icon><Check /></el-icon>
+                已完成
+              </span>
+            </div>
+          </div>
+
+          <div class="item-actions">
+            <el-dropdown trigger="click" @click.stop>
+              <el-button text size="small">
+                <el-icon><More /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item @click="viewDetail(file.id)">
+                    <el-icon><View /></el-icon>
+                    查看详情
+                  </el-dropdown-item>
+                  <el-dropdown-item @click="downloadFile(file)">
+                    <el-icon><Download /></el-icon>
+                    下载结果
+                  </el-dropdown-item>
+                  <el-dropdown-item divided @click="deleteFile(file.id)">
+                    <el-icon><Delete /></el-icon>
+                    删除
+                  </el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </div>
+        </el-card>
+      </div>
+
+      <!-- 分页 -->
+      <div v-if="total > pageSize" class="pagination-wrapper">
+        <el-pagination
+          v-model:current-page="currentPage"
+          :page-size="pageSize"
+          :total="total"
+          layout="prev, pager, next, jumper"
+          @current-change="handlePageChange"
+        />
+      </div>
     </div>
   </div>
 </template>
@@ -70,16 +118,19 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { getHistoryList } from '../api/video'
 
 const router = useRouter()
 const loading = ref(false)
 const historyList = ref([])
 const currentPage = ref(1)
-const pageSize = ref(10)
+const pageSize = ref(12)
 const total = ref(0)
+const searchKeyword = ref('')
+const statusFilter = ref('')
 
+// 获取历史列表
 const fetchHistory = async () => {
   loading.value = true
   try {
@@ -88,45 +139,128 @@ const fetchHistory = async () => {
       historyList.value = res.data.list || []
       total.value = res.data.total || 0
     } else {
-      ElMessage.error(res.message || '获取历史记录失败')
+      ElMessage.error(res.message || '获取失败')
     }
   } catch (error) {
-    console.error('获取历史记录失败:', error)
-    ElMessage.error('网络错误,请重试')
+    console.error('获取失败:', error)
+    ElMessage.error('网络错误')
   } finally {
     loading.value = false
   }
 }
 
+// 查看详情
+const viewDetail = (id) => {
+  router.push(`/result/${id}`)
+}
+
+// 下载文件
+const downloadFile = (file) => {
+  if (!file.transcript && !file.summary) {
+    ElMessage.warning('暂无可下载内容')
+    return
+  }
+
+  const content = `
+标题: ${file.originalName}
+时间: ${formatTime(file.createTime)}
+状态: ${getStatusText(file.status)}
+
+【转录文本】
+${file.transcript || '无'}
+
+【AI 总结】
+${file.summary || '无'}
+  `.trim()
+
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${file.originalName}_转写结果.txt`
+  a.click()
+  URL.revokeObjectURL(url)
+
+  ElMessage.success('下载成功')
+}
+
+// 删除文件
+const deleteFile = async (id) => {
+  try {
+    await ElMessageBox.confirm('确定要删除这个文件吗?', '提示', {
+      confirmButtonText: '确定',
+      cancelButtonText: '取消',
+      type: 'warning'
+    })
+
+    // TODO: 调用删除接口
+    ElMessage.success('删除成功')
+    await fetchHistory()
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('删除失败:', error)
+      ElMessage.error('删除失败')
+    }
+  }
+}
+
+// 清空全部
+const clearAll = async () => {
+  try {
+    await ElMessageBox.confirm('确定要清空所有历史记录吗?此操作不可恢复!', '警告', {
+      confirmButtonText: '确定清空',
+      cancelButtonText: '取消',
+      type: 'error'
+    })
+
+    // TODO: 调用批量删除接口
+    ElMessage.success('已清空')
+    await fetchHistory()
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('清空失败:', error)
+    }
+  }
+}
+
+// 搜索
+const handleSearch = () => {
+  // TODO: 实现搜索逻辑
+  console.log('搜索:', searchKeyword.value)
+}
+
+// 筛选
+const handleFilter = () => {
+  // TODO: 实现筛选逻辑
+  console.log('筛选:', statusFilter.value)
+  fetchHistory()
+}
+
+// 分页
 const handlePageChange = (page) => {
   currentPage.value = page
   fetchHistory()
 }
 
-const viewDetail = (id) => {
-  router.push(`/result/${id}`)
-}
-
+// 格式化时间
 const formatTime = (time) => {
   if (!time) return '-'
-  return new Date(time).toLocaleString('zh-CN')
-}
-
-const getStatusType = (status) => {
-  const types = {
-    'UPLOADED': 'info',
-    'CONVERTED': 'warning',
-    'TRANSCRIBED': 'primary',
-    'SUMMARIZED': 'success'
-  }
-  return types[status] || 'info'
+  const date = new Date(time)
+  const now = new Date()
+  const diff = now - date
+  
+  if (diff < 60000) return '刚刚'
+  if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`
+  if (diff < 604800000) return `${Math.floor(diff / 86400000)}天前`
+  
+  return date.toLocaleDateString('zh-CN')
 }
 
 const getStatusText = (status) => {
   const texts = {
     'UPLOADED': '已上传',
     'CONVERTED': '已转换',
-    'TRANSCRIBED': '已转录',
     'SUMMARIZED': '已完成'
   }
   return texts[status] || status
@@ -138,91 +272,149 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.history-view {
-  min-height: 100vh;
-  background: #f5f7fa;
+.history-page {
+  max-width: 1400px;
+  margin: 0 auto;
 }
 
-.content-wrapper {
-  max-width: 1000px;
-  margin: 30px auto;
-  padding: 0 20px;
+.page-header {
+  margin-bottom: 24px;
 }
 
-.page-title {
-  font-size: 18px;
-  font-weight: bold;
+.page-header h2 {
+  font-size: 24px;
+  font-weight: 700;
+  color: #262626;
+  margin: 0 0 4px;
 }
 
-.loading-box {
-  padding: 20px;
+.page-header p {
+  font-size: 14px;
+  color: #8c8c8c;
+  margin: 0;
+}
+
+.filter-bar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  align-items: center;
 }
 
 .history-list {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
+  min-height: 400px;
+}
+
+.file-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
 }
 
 .history-item {
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.3s;
+  border-radius: 12px;
+  position: relative;
+  overflow: hidden;
 }
 
 .history-item:hover {
-  transform: translateX(5px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
 }
 
-.item-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
+.item-status {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 1;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #52c41a;
+  box-shadow: 0 0 12px rgba(82, 196, 26, 0.6);
+  animation: pulse 2s infinite;
+}
+
+.item-status.processing .status-dot {
+  background: #ff4d4f;
+  box-shadow: 0 0 12px rgba(255, 77, 79, 0.6);
+  animation: pulse 1s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.2); }
+}
+
+.item-content {
+  padding: 8px 0;
 }
 
 .item-title {
-  margin: 0;
-  font-size: 16px;
-  color: #303133;
-  flex: 1;
+  font-size: 15px;
+  font-weight: 600;
+  color: #262626;
+  margin: 0 0 8px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  margin-right: 10px;
 }
 
-.item-info {
+.item-summary {
+  font-size: 13px;
+  color: #8c8c8c;
+  margin: 0 0 12px;
+  line-height: 1.6;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 42px;
+}
+
+.item-meta {
   display: flex;
-  gap: 20px;
-  margin-bottom: 10px;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
-.info-text {
+.meta-item {
   display: flex;
   align-items: center;
-  gap: 5px;
-  color: #909399;
-  font-size: 13px;
+  gap: 4px;
+  font-size: 12px;
+  color: #bfbfbf;
 }
 
 .item-actions {
-  text-align: right;
+  position: absolute;
+  top: 8px;
+  right: 8px;
 }
 
-.pagination-box {
-  margin-top: 20px;
+.pagination-wrapper {
+  margin-top: 32px;
   text-align: center;
 }
 
 @media (max-width: 768px) {
-  .content-wrapper {
-    margin: 15px auto;
-    padding: 0 10px;
+  .filter-bar {
+    flex-direction: column;
+    align-items: stretch;
   }
 
-  .item-title {
-    font-size: 14px;
+  .filter-bar .el-input,
+  .filter-bar .el-select {
+    width: 100% !important;
+  }
+
+  .file-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>
