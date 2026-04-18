@@ -31,10 +31,9 @@ public class RagServiceImpl implements RagService {
 
     @Override
     public void indexSegments(Long taskId, List<VideoTranscriptSegment> segments) {
-        List<TranscriptSegmentVO> vos = segments.stream()
-                .map(this::toVO)
-                .collect(Collectors.toList());
-        vectorSearchService.indexSegments(taskId, vos);
+        for (VideoTranscriptSegment segment : segments) {
+            segmentMapper.insert(segment);
+        }
     }
 
     @Override

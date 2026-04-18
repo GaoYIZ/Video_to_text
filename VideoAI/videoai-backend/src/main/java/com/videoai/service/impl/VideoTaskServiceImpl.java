@@ -105,6 +105,7 @@ public class VideoTaskServiceImpl implements VideoTaskService {
         if (!userId.equals(uploadRecord.getUserId()) || uploadRecord.getMediaFileId() == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "请先完成文件上传");
         }
+
         VideoTask exists = videoTaskMapper.selectOne(Wrappers.<VideoTask>lambdaQuery()
                 .eq(VideoTask::getUserId, userId)
                 .eq(VideoTask::getFileId, uploadRecord.getMediaFileId())
@@ -114,6 +115,7 @@ public class VideoTaskServiceImpl implements VideoTaskService {
         if (exists != null) {
             return toVO(exists);
         }
+
         MediaFile mediaFile = mediaFileMapper.selectById(uploadRecord.getMediaFileId());
         VideoTask task = new VideoTask();
         task.setTaskNo(IdUtils.taskNo());
@@ -127,8 +129,9 @@ public class VideoTaskServiceImpl implements VideoTaskService {
         task.setRetryCount(0);
         task.setSessionId(request.getSessionId());
         videoTaskMapper.insert(task);
+
         taskEventLogService.log(task.getId(), task.getTaskNo(), null, TaskStatusEnum.UPLOADED.getCode(),
-                "UPLOAD_FINISHED", "TASK_CREATED", true, "任务已创建并等待调度");
+                "UPLOAD_FINISHED", "TASK_CREATED", true, "任务已创建，等待调度执行");
         dispatchService.dispatch(task);
         return toVO(task);
     }
@@ -138,7 +141,8 @@ public class VideoTaskServiceImpl implements VideoTaskService {
         IPage<VideoTask> page = videoTaskMapper.selectPage(new Page<>(request.getCurrent(), request.getPageSize()),
                 Wrappers.<VideoTask>lambdaQuery()
                         .eq(VideoTask::getUserId, userId)
-                        .like(request.getKeyword() != null && !request.getKeyword().isBlank(), VideoTask::getVideoTitle, request.getKeyword())
+                        .like(request.getKeyword() != null && !request.getKeyword().isBlank(),
+                                VideoTask::getVideoTitle, request.getKeyword())
                         .eq(request.getStatus() != null, VideoTask::getStatus, request.getStatus())
                         .orderByDesc(VideoTask::getId));
         return PageVO.<VideoTaskVO>builder()
@@ -194,8 +198,9 @@ public class VideoTaskServiceImpl implements VideoTaskService {
         task.setCurrentStep("RETRY_QUEUED");
         task.setProgressPercent(10);
         videoTaskMapper.updateById(task);
+
         taskEventLogService.log(task.getId(), task.getTaskNo(), TaskStatusEnum.FAILED.getCode(), TaskStatusEnum.QUEUED.getCode(),
-                "RETRY", "MANUAL_RETRY", true, "手动重试任务");
+                "RETRY", "MANUAL_RETRY", true, "用户手动重试任务");
         dispatchService.dispatch(task);
     }
 
@@ -234,19 +239,22 @@ public class VideoTaskServiceImpl implements VideoTaskService {
         if (task == null) {
             return;
         }
-        String lockKey = RedisKeyConstants.VIDEO_TASK_LOCK.formatted(taskId);
-        RLock lock = redissonClient.getLock(lockKey);
+
+        RLock lock = redissonClient.getLock(RedisKeyConstants.VIDEO_TASK_LOCK.formatted(taskId));
         if (!lock.tryLock()) {
             log.info("skip duplicate task process, taskId={}", taskId);
             return;
         }
+
         LocalDateTime startTime = LocalDateTime.now();
         try {
             task.setStartedAt(startTime);
             videoTaskMapper.updateById(task);
+
             transition(task, TaskStatusEnum.QUEUED, "DISPATCH", "任务进入异步处理队列");
             MediaFile mediaFile = mediaFileMapper.selectById(task.getFileId());
             File sourceFile = storageService.downloadToLocal(mediaFile);
+
             File audioFile = extractAudio(sourceFile, task.getTaskNo());
             transition(task, TaskStatusEnum.PROCESSING_AUDIO, "EXTRACT_AUDIO", "音频提取完成");
 
@@ -260,13 +268,13 @@ public class VideoTaskServiceImpl implements VideoTaskService {
             summaryMapper.delete(Wrappers.<VideoSummary>lambdaQuery().eq(VideoSummary::getTaskId, taskId));
             SummaryResult summaryResult = summaryService.summarize(task, transcript);
 
-            transition(task, TaskStatusEnum.INDEXING, "RAG_INDEX", "构建分段检索索引");
+            transition(task, TaskStatusEnum.INDEXING, "RAG_INDEX", "开始构建转写片段索引");
             buildSegmentIndex(task, transcript, asrResult);
 
             task.setFinishedAt(LocalDateTime.now());
             task.setCostTimeMs(Duration.between(startTime, task.getFinishedAt()).toMillis());
             videoTaskMapper.updateById(task);
-            transition(task, TaskStatusEnum.SUCCESS, "DONE", "任务处理完成，总结标题：" + summaryResult.getTitle());
+            transition(task, TaskStatusEnum.SUCCESS, "DONE", "任务处理完成，标题：" + summaryResult.getTitle());
         } catch (Exception e) {
             log.error("process task error, taskId={}", taskId, e);
             task.setStatus(TaskStatusEnum.FAILED.getStatus());
@@ -294,7 +302,7 @@ public class VideoTaskServiceImpl implements VideoTaskService {
             entity.setEndTimeMs(segment.getEndTimeMs());
             entity.setContent(segment.getContent());
             entity.setKeywords(extractKeywords(segment.getContent()));
-            entity.setTokenCount(segment.getContent().length() / 2);
+            entity.setTokenCount(Math.max(1, segment.getContent().length() / 2));
             return entity;
         }).toList();
         ragService.indexSegments(task.getId(), segments);
@@ -316,8 +324,9 @@ public class VideoTaskServiceImpl implements VideoTaskService {
     }
 
     private File extractAudio(File sourceFile, String taskNo) throws IOException, InterruptedException {
-        File output = new File("data/temp/audio/" + taskNo + ".wav");
+        File output = new File(properties.getStorage().getTempBasePath() + "/audio/" + taskNo + ".wav");
         FileUtil.mkdir(output.getParentFile());
+
         ProcessBuilder processBuilder = new ProcessBuilder(
                 properties.getFfmpeg().getCommand(),
                 "-y",
@@ -328,20 +337,21 @@ public class VideoTaskServiceImpl implements VideoTaskService {
                 "-ac", "1",
                 output.getAbsolutePath()
         );
+
         try {
             Process process = processBuilder.start();
             int exitCode = process.waitFor();
             if (exitCode != 0 || !output.exists()) {
-                FileUtil.copy(sourceFile, output, true);
+                throw new BusinessException("FFmpeg audio extraction failed for task " + taskNo);
             }
+            return output;
         } catch (IOException e) {
-            FileUtil.copy(sourceFile, output, true);
+            throw new BusinessException("FFmpeg audio extraction failed: " + e.getMessage());
         }
-        return output;
     }
 
     private String extractKeywords(String content) {
-        return List.of(content.split("[，。,\\s]+")).stream()
+        return List.of(content.split("[，。！？；：、\\s]+")).stream()
                 .filter(item -> item.length() > 1)
                 .limit(5)
                 .map(item -> item.toLowerCase(Locale.ROOT))

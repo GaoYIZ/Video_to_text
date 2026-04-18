@@ -44,6 +44,14 @@ public class VideoAiProperties {
     public static class Asr {
         private boolean mock = true;
         private Integer maxRetries = 3;
+        private String pythonCommand = "python";
+        private String scriptPath = "";
+        private String modelName = "tiny";
+        private String language = "zh";
+        private String device = "cpu";
+        private String computeType = "int8";
+        private String cacheDir = "";
+        private Integer beamSize = 5;
     }
 
     @Data

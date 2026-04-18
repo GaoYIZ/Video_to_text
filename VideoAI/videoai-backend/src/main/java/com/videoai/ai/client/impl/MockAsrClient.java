@@ -4,6 +4,7 @@ import cn.hutool.core.io.FileUtil;
 import com.videoai.ai.client.AsrClient;
 import com.videoai.ai.model.AsrResult;
 import com.videoai.ai.model.AsrSegment;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.io.File;
@@ -11,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Component
+@ConditionalOnProperty(prefix = "videoai.asr", name = "mock", havingValue = "true", matchIfMissing = true)
 public class MockAsrClient implements AsrClient {
 
     @Override

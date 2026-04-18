@@ -3,6 +3,7 @@ package com.videoai.ai.client.impl;
 import com.videoai.ai.client.DeepSeekClient;
 import com.videoai.ai.model.QuestionAnswerResult;
 import com.videoai.ai.model.SummaryResult;
+import com.videoai.common.util.AiUrlUtils;
 import com.videoai.common.util.JsonUtils;
 import com.videoai.config.VideoAiProperties;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -26,7 +27,7 @@ public class DeepSeekClientImpl implements DeepSeekClient {
     public DeepSeekClientImpl(VideoAiProperties properties) {
         this.properties = properties;
         this.restClient = RestClient.builder()
-                .baseUrl(properties.getAi().getBaseUrl())
+                .baseUrl(AiUrlUtils.normalizeCompatibleBaseUrl(properties.getAi().getBaseUrl()))
                 .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + properties.getAi().getApiKey())
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .build();
@@ -36,19 +37,19 @@ public class DeepSeekClientImpl implements DeepSeekClient {
     public SummaryResult summarize(String transcriptText) {
         Instant start = Instant.now();
         String prompt = """
-                请基于以下转写内容输出 JSON，字段为：
-                title, summary, outline, keywords, highlights, qa_suggestions。
+                请基于以下视频转写内容输出严格 JSON，字段为：
+                title, summary, outline, keywords, highlights, qa_suggestions
                 转写内容：
                 %s
                 """.formatted(transcriptText);
         Map<String, Object> response = createCompletion(List.of(
-                Map.of("role", "system", "content", "你是视频内容总结助手，只返回 JSON。"),
+                Map.of("role", "system", "content", "你是视频内容总结助手，只返回 JSON，不要输出额外解释。"),
                 Map.of("role", "user", "content", prompt)
         ));
         String content = extractContent(response);
         Map<String, Object> json = JsonUtils.toMap(content);
         return SummaryResult.builder()
-                .title(String.valueOf(json.getOrDefault("title", "视频总结")))
+                .title(String.valueOf(json.getOrDefault("title", "视频内容总结")))
                 .summary(String.valueOf(json.getOrDefault("summary", "")))
                 .outline(castList(json.get("outline")))
                 .keywords(castList(json.get("keywords")))
@@ -88,7 +89,8 @@ public class DeepSeekClientImpl implements DeepSeekClient {
                         "model", properties.getAi().getModel(),
                         "messages", messages,
                         "temperature", 0.2,
-                        "stream", false
+                        "stream", false,
+                        "response_format", Map.of("type", "json_object")
                 ))
                 .retrieve()
                 .body(Map.class);

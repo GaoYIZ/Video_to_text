@@ -42,83 +42,82 @@ onMounted(loadData)
 
 <template>
   <div class="page-shell usage-page">
-    <section class="panel summary-board">
+    <section class="usage-hero panel fade-in-up">
       <div>
         <div class="mono">COST GOVERNANCE</div>
-        <h1>AI 使用统计与成本控制</h1>
-        <p>这里展示配额、调用量、Token、费用估算、响应时间、缓存命中率和成功率，方便你从工程和 AI 成本两个维度讲项目。</p>
+        <h1 class="page-title">AI 调用配额、成本与缓存收益</h1>
+        <p class="page-copy">
+          这一页聚焦“模型调用是否可控”。你可以查看用户配额、Token 消耗、费用估算、缓存命中率与成功率，完整体现项目的成本治理能力。
+        </p>
       </div>
     </section>
 
     <section v-if="quota" class="panel quota-section">
-      <div class="section-head">
+      <div class="section-header">
         <div>
-          <h3>用户配额状态</h3>
-          <p>默认提供每日 100 次、每月 3000 次 AI 调用额度，可在数据库中按用户调整。</p>
+          <h3 class="section-heading">用户配额</h3>
+          <p class="section-description">默认支持每日与每月双层配额控制，避免单用户过度消耗模型资源。</p>
         </div>
       </div>
 
       <div class="quota-grid">
-        <div class="quota-item">
+        <div class="quota-card panel-muted">
           <span>今日已用 / 限额</span>
           <strong>{{ quota.todayUsed }} / {{ quota.dailyLimit }}</strong>
           <div class="progress-bar">
             <div class="progress-fill" :style="{ width: `${percentage(quota.todayUsed, quota.dailyLimit)}%` }" />
           </div>
         </div>
-
-        <div class="quota-item">
+        <div class="quota-card panel-muted">
           <span>本月已用 / 限额</span>
           <strong>{{ quota.monthUsed }} / {{ quota.monthlyLimit }}</strong>
           <div class="progress-bar">
             <div class="progress-fill" :style="{ width: `${percentage(quota.monthUsed, quota.monthlyLimit)}%` }" />
           </div>
         </div>
-
-        <div class="quota-item">
+        <div class="quota-card panel-muted">
           <span>今日剩余</span>
-          <strong :class="{ warning: quota.remainingToday < 10 }">{{ quota.remainingToday }}</strong>
+          <strong>{{ quota.remainingToday }}</strong>
         </div>
-
-        <div class="quota-item">
+        <div class="quota-card panel-muted">
           <span>本月剩余</span>
-          <strong :class="{ warning: quota.remainingMonth < 100 }">{{ quota.remainingMonth }}</strong>
+          <strong>{{ quota.remainingMonth }}</strong>
         </div>
       </div>
     </section>
 
-    <section class="usage-grid">
-      <div class="panel usage-item">
+    <section class="overview-grid">
+      <div class="panel overview-card">
         <span>总调用次数</span>
         <strong>{{ usage.totalCalls }}</strong>
       </div>
-      <div class="panel usage-item">
+      <div class="panel overview-card">
         <span>总 Token</span>
         <strong>{{ usage.totalTokens }}</strong>
       </div>
-      <div class="panel usage-item">
-        <span>Summary Calls</span>
+      <div class="panel overview-card">
+        <span>摘要调用</span>
         <strong>{{ usage.summaryCalls }}</strong>
       </div>
-      <div class="panel usage-item">
-        <span>QA Calls</span>
+      <div class="panel overview-card">
+        <span>问答调用</span>
         <strong>{{ usage.qaCalls }}</strong>
       </div>
-      <div class="panel usage-item">
+      <div class="panel overview-card">
         <span>任务总数</span>
         <strong>{{ usage.taskCount }}</strong>
       </div>
-      <div class="panel usage-item">
+      <div class="panel overview-card">
         <span>月度配额</span>
         <strong>{{ usage.quotaLimit }}</strong>
       </div>
     </section>
 
-    <section v-if="currentStats" class="panel detailed-stats">
-      <div class="section-head">
+    <section v-if="currentStats" class="panel stats-section">
+      <div class="section-header">
         <div>
-          <h3>详细用量统计</h3>
-          <p>支持按日和按月查看业务分布、模型分布和成本估算。</p>
+          <h3 class="section-heading">详细统计</h3>
+          <p class="section-description">可以按日或按月查看业务调用分布、模型分布与费用估算。</p>
         </div>
 
         <div class="tab-buttons">
@@ -128,152 +127,149 @@ onMounted(loadData)
       </div>
 
       <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-label">调用次数</div>
-          <div class="stat-value">{{ currentStats.totalCalls }}</div>
+        <div class="stat-card panel-muted">
+          <span>调用次数</span>
+          <strong>{{ currentStats.totalCalls }}</strong>
         </div>
-        <div class="stat-card">
-          <div class="stat-label">输入 Token</div>
-          <div class="stat-value">{{ currentStats.totalInputTokens }}</div>
+        <div class="stat-card panel-muted">
+          <span>输入 Token</span>
+          <strong>{{ currentStats.totalInputTokens }}</strong>
         </div>
-        <div class="stat-card">
-          <div class="stat-label">输出 Token</div>
-          <div class="stat-value">{{ currentStats.totalOutputTokens }}</div>
+        <div class="stat-card panel-muted">
+          <span>输出 Token</span>
+          <strong>{{ currentStats.totalOutputTokens }}</strong>
         </div>
-        <div class="stat-card">
-          <div class="stat-label">预估费用</div>
-          <div class="stat-value price">¥{{ currentStats.estimatedCost.toFixed(4) }}</div>
+        <div class="stat-card panel-muted">
+          <span>费用估算</span>
+          <strong>¥{{ currentStats.estimatedCost.toFixed(4) }}</strong>
         </div>
-        <div class="stat-card">
-          <div class="stat-label">平均响应时间</div>
-          <div class="stat-value">{{ currentStats.avgResponseTimeMs }} ms</div>
+        <div class="stat-card panel-muted">
+          <span>平均响应时间</span>
+          <strong>{{ currentStats.avgResponseTimeMs }} ms</strong>
         </div>
-        <div class="stat-card">
-          <div class="stat-label">缓存命中率</div>
-          <div class="stat-value">{{ currentStats.cacheHitRate.toFixed(2) }}%</div>
+        <div class="stat-card panel-muted">
+          <span>缓存命中率</span>
+          <strong>{{ currentStats.cacheHitRate.toFixed(2) }}%</strong>
         </div>
-        <div class="stat-card">
-          <div class="stat-label">成功率</div>
-          <div class="stat-value">{{ currentStats.successRate.toFixed(2) }}%</div>
+        <div class="stat-card panel-muted">
+          <span>成功率</span>
+          <strong>{{ currentStats.successRate.toFixed(2) }}%</strong>
         </div>
       </div>
 
-      <div v-if="currentStats.callsByBizType" class="breakdown-section">
-        <h4>按业务类型分布</h4>
-        <div class="breakdown-list">
-          <div v-for="(count, type) in currentStats.callsByBizType" :key="type" class="breakdown-item">
-            <span class="type-name">{{ type }}</span>
-            <span class="type-count">{{ count }} 次</span>
+      <div v-if="currentStats.callsByBizType" class="breakdown-grid">
+        <div class="panel-muted breakdown-card">
+          <h4>按业务类型分布</h4>
+          <div class="breakdown-list">
+            <div v-for="(count, type) in currentStats.callsByBizType" :key="type" class="breakdown-item">
+              <span>{{ type }}</span>
+              <strong>{{ count }}</strong>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div v-if="currentStats.callsByModel" class="breakdown-section">
-        <h4>按模型分布</h4>
-        <div class="breakdown-list">
-          <div v-for="(count, model) in currentStats.callsByModel" :key="model" class="breakdown-item">
-            <span class="type-name">{{ model }}</span>
-            <span class="type-count">{{ count }} 次</span>
+        <div v-if="currentStats.callsByModel" class="panel-muted breakdown-card">
+          <h4>按模型分布</h4>
+          <div class="breakdown-list">
+            <div v-for="(count, model) in currentStats.callsByModel" :key="model" class="breakdown-item">
+              <span>{{ model }}</span>
+              <strong>{{ count }}</strong>
+            </div>
           </div>
         </div>
       </div>
     </section>
 
-    <section class="panel governance">
-      <div class="section-head">
+    <section class="panel governance-section">
+      <div class="section-header">
         <div>
-          <h3>已落地的治理能力</h3>
-          <p>这些策略共同支撑高并发、防刷和成本控制。</p>
+          <h3 class="section-heading">已落地的治理能力</h3>
+          <p class="section-description">这些策略共同支持高并发、防刷和模型成本控制。</p>
         </div>
       </div>
-      <ul>
-        <li>Redis 令牌桶限流，控制用户级别访问频率。</li>
-        <li>视频摘要缓存和同问题 QA 缓存，减少重复调用。</li>
-        <li>重复任务拦截，避免对同一文件反复触发昂贵处理链路。</li>
-        <li>AI usage 全量记录，支持按用户、业务类型、模型统计。</li>
-        <li>每日与每月双层配额控制，防止单用户过度消耗资源。</li>
-        <li>基于 Token 的费用估算，便于展示成本治理能力。</li>
-      </ul>
+
+      <div class="governance-list">
+        <div class="panel-muted">
+          <strong>配额控制</strong>
+          <p>按用户维度限制每日和每月可用额度，防止资源被单点消耗。</p>
+        </div>
+        <div class="panel-muted">
+          <strong>缓存复用</strong>
+          <p>摘要缓存、问答缓存与常见问题复用共同降低重复调用。</p>
+        </div>
+        <div class="panel-muted">
+          <strong>重复任务拦截</strong>
+          <p>对相同文件和重复任务进行拦截，避免昂贵处理链路重复执行。</p>
+        </div>
+        <div class="panel-muted">
+          <strong>Usage 统计</strong>
+          <p>按业务类型、模型和时间维度记录 Token、耗时和成功率。</p>
+        </div>
+      </div>
     </section>
   </div>
 </template>
 
 <style scoped>
 .usage-page {
-  display: grid;
   gap: 20px;
 }
 
-.summary-board,
-.usage-item,
-.governance,
+.usage-hero,
 .quota-section,
-.detailed-stats {
-  border-radius: 28px;
+.stats-section,
+.governance-section,
+.overview-card {
+  border-radius: 30px;
   padding: 24px;
 }
 
-.summary-board h1 {
-  margin: 12px 0;
-  font-size: clamp(34px, 4vw, 60px);
-  letter-spacing: -0.06em;
-}
-
-.summary-board p,
-.usage-item span,
-.section-head p {
-  color: var(--muted);
-}
-
-.usage-grid {
+.quota-grid,
+.overview-grid,
+.stats-grid,
+.breakdown-grid,
+.governance-list {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
   gap: 20px;
-}
-
-.usage-item strong {
-  display: block;
-  margin-top: 12px;
-  font-size: 36px;
 }
 
 .quota-grid {
-  display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 20px;
-  margin-top: 16px;
+  margin-top: 18px;
 }
 
-.quota-item,
-.stat-card {
+.quota-card,
+.stat-card,
+.breakdown-card,
+.governance-list > div {
+  border-radius: 18px;
   padding: 18px;
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 16px;
 }
 
-.quota-item span,
-.stat-label {
-  display: block;
-  font-size: 14px;
+.quota-card span,
+.overview-card span,
+.stat-card span,
+.breakdown-item span {
   color: var(--muted);
-  margin-bottom: 8px;
+  font-size: 13px;
 }
 
-.quota-item strong,
-.stat-value {
+.quota-card strong,
+.overview-card strong,
+.stat-card strong {
   display: block;
+  margin-top: 8px;
   font-size: 28px;
-  font-weight: 700;
 }
 
-.quota-item strong.warning {
-  color: #ff7d7d;
+.overview-grid {
+  grid-template-columns: repeat(3, 1fr);
 }
 
 .progress-bar {
   width: 100%;
   height: 8px;
-  margin-top: 12px;
+  margin-top: 14px;
   background: rgba(255, 255, 255, 0.08);
   border-radius: 999px;
   overflow: hidden;
@@ -281,7 +277,7 @@ onMounted(loadData)
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #f6b655 0%, #ef8d3c 100%);
+  background: linear-gradient(90deg, #ffb761, #ff8f57);
   transition: width 0.3s ease;
 }
 
@@ -291,90 +287,68 @@ onMounted(loadData)
 }
 
 .tab-buttons button {
-  padding: 8px 20px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: transparent;
-  color: var(--text);
+  border: 1px solid var(--line);
   border-radius: 999px;
+  background: transparent;
+  color: var(--text-soft);
+  padding: 10px 18px;
   cursor: pointer;
-  transition: all 0.24s ease;
+  transition:
+    background 0.24s ease,
+    border-color 0.24s ease,
+    color 0.24s ease;
 }
 
 .tab-buttons button.active {
-  background: rgba(246, 182, 85, 0.14);
+  background: rgba(255, 183, 97, 0.12);
+  border-color: rgba(255, 183, 97, 0.28);
   color: var(--accent);
-  border-color: rgba(246, 182, 85, 0.25);
 }
 
 .stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   margin-top: 20px;
 }
 
-.stat-value.price {
-  color: #ffd27a;
+.breakdown-grid,
+.governance-list {
+  grid-template-columns: 1fr 1fr;
+  margin-top: 20px;
 }
 
-.breakdown-section {
-  margin-top: 24px;
-  padding-top: 24px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.breakdown-section h4 {
+.breakdown-card h4 {
   margin: 0 0 16px;
   font-size: 18px;
 }
 
 .breakdown-list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: 12px;
 }
 
 .breakdown-item {
   display: flex;
   justify-content: space-between;
+  gap: 12px;
   align-items: center;
-  padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 10px;
 }
 
-.type-count {
+.governance-list strong {
+  font-size: 17px;
+}
+
+.governance-list p {
+  margin: 10px 0 0;
   color: var(--muted);
-}
-
-.section-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 18px;
-}
-
-.section-head h3 {
-  margin: 0 0 8px;
-  font-size: 24px;
-}
-
-.governance ul {
-  margin: 0;
-  padding-left: 18px;
-  line-height: 2;
-  color: #dce2ec;
+  line-height: 1.7;
 }
 
 @media (max-width: 1100px) {
-  .usage-grid,
   .quota-grid,
-  .section-head {
+  .overview-grid,
+  .breakdown-grid,
+  .governance-list {
     grid-template-columns: 1fr;
-  }
-
-  .section-head {
-    display: grid;
   }
 }
 </style>

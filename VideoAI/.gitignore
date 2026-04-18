@@ -1,3 +1,7 @@
 .runlogs/
 tools/ffmpeg/
 tools/ffmpeg.zip
+tools/asr/.venv/
+tools/asr/models/
+tools/asr/cache/
+tools/env.local.ps1

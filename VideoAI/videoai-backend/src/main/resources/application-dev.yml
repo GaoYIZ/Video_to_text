@@ -31,15 +31,23 @@ videoai:
   ffmpeg:
     command: ${VIDEOAI_FFMPEG:ffmpeg}
   ai:
-    mock: true
-    base-url: https://api.deepseek.com
-    api-key:
-    model: deepseek-chat
+    mock: ${VIDEOAI_AI_MOCK:false}
+    base-url: ${VIDEOAI_AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+    api-key: ${VIDEOAI_AI_API_KEY:}
+    model: ${VIDEOAI_AI_MODEL:qwen-plus}
     timeout-seconds: 60
     max-retries: 3
   asr:
-    mock: true
+    mock: ${VIDEOAI_ASR_MOCK:false}
     max-retries: 3
+    python-command: ${VIDEOAI_ASR_PYTHON:python}
+    script-path: ${VIDEOAI_ASR_SCRIPT:}
+    model-name: ${VIDEOAI_ASR_MODEL:}
+    language: ${VIDEOAI_ASR_LANGUAGE:zh-cn}
+    device: ${VIDEOAI_ASR_DEVICE:cpu}
+    compute-type: ${VIDEOAI_ASR_COMPUTE_TYPE:}
+    cache-dir: ${VIDEOAI_ASR_CACHE_DIR:}
+    beam-size: ${VIDEOAI_ASR_BEAM_SIZE:5}
   mq:
     enabled: false
     video-task-topic: video-task-topic

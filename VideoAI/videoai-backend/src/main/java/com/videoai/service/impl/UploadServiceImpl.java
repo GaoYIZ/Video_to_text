@@ -19,6 +19,7 @@ import com.videoai.model.vo.UploadInitVO;
 import com.videoai.service.UploadService;
 import com.videoai.storage.StorageObject;
 import com.videoai.storage.StorageService;
+import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.data.redis.core.RedisTemplate;
@@ -40,6 +41,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 
+@Slf4j
 @Service
 public class UploadServiceImpl implements UploadService {
 
@@ -153,6 +155,7 @@ public class UploadServiceImpl implements UploadService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long mergeChunks(Long userId, UploadMergeRequest request) {
+        log.info("[MergeChunks] Start merging uploadId: {}, fileName: {}", request.getUploadId(), request.getFileName());
         UploadRecord uploadRecord = getByUploadId(request.getUploadId());
         if (!Objects.equals(uploadRecord.getUserId(), userId)) {
             throw new BusinessException(ErrorCode.FORBIDDEN);
@@ -161,23 +164,34 @@ public class UploadServiceImpl implements UploadService {
         if (uploadedChunks.size() < uploadRecord.getTotalChunks()) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "仍有分片未上传完成");
         }
+        log.info("[MergeChunks] All {} chunks verified", uploadedChunks.size());
+        
         String lockKey = RedisKeyConstants.VIDEO_FILE_LOCK.formatted(request.getFileMd5());
         RLock lock = redissonClient.getLock(lockKey);
         lock.lock();
         try {
+            log.info("[MergeChunks] Acquired lock for fileMd5: {}", request.getFileMd5());
             MediaFile exists = mediaFileMapper.selectOne(Wrappers.<MediaFile>lambdaQuery()
                     .eq(MediaFile::getFileMd5, request.getFileMd5()));
             if (exists != null) {
+                log.info("[MergeChunks] File already exists, fast hit: fileId={}", exists.getId());
                 uploadRecord.setStatus(UploadStatusEnum.FAST_HIT.getCode());
                 uploadRecord.setMediaFileId(exists.getId());
                 uploadRecord.setUploadedChunksJson(JsonUtils.toJson(uploadedChunks));
                 uploadRecordMapper.updateById(uploadRecord);
                 return exists.getId();
             }
+            
+            log.info("[MergeChunks] Merging chunk files...");
             File mergedFile = mergeChunkFiles(uploadRecord, request.getFileName());
+            log.info("[MergeChunks] Merged file created: {}, size: {} bytes", mergedFile.getAbsolutePath(), mergedFile.length());
+            
             String ext = FileUtil.extName(request.getFileName());
             String objectName = "video/" + request.getFileMd5() + (StrUtil.isBlank(ext) ? "" : "." + ext);
+            log.info("[MergeChunks] Uploading to storage: {}", objectName);
             StorageObject storageObject = storageService.upload(mergedFile, objectName, "application/octet-stream");
+            log.info("[MergeChunks] Storage upload completed: bucket={}, object={}", storageObject.getBucketName(), storageObject.getObjectName());
+            
             MediaFile mediaFile = new MediaFile();
             mediaFile.setFileNo(IdUtils.fileNo());
             mediaFile.setUserId(userId);
@@ -192,14 +206,17 @@ public class UploadServiceImpl implements UploadService {
             mediaFile.setUploadStatus(UploadStatusEnum.MERGED.getCode());
             mediaFile.setRefCount(1);
             mediaFileMapper.insert(mediaFile);
+            log.info("[MergeChunks] MediaFile inserted: id={}", mediaFile.getId());
 
             uploadRecord.setStatus(UploadStatusEnum.MERGED.getCode());
             uploadRecord.setMediaFileId(mediaFile.getId());
             uploadRecord.setUploadedChunksJson(JsonUtils.toJson(uploadedChunks));
             uploadRecordMapper.updateById(uploadRecord);
+            log.info("[MergeChunks] Completed successfully, fileId={}", mediaFile.getId());
             return mediaFile.getId();
         } finally {
             lock.unlock();
+            log.info("[MergeChunks] Lock released");
         }
     }
 

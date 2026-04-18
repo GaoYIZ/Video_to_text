@@ -6,6 +6,11 @@ $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $backendDir = Join-Path $projectRoot "videoai-backend"
 $runLogDir = Join-Path $projectRoot ".runlogs"
+$envFile = Join-Path $PSScriptRoot "env.local.ps1"
+$asrPython = Join-Path $projectRoot "tools\\asr\\.venv\\Scripts\\python.exe"
+$asrScript = Join-Path $projectRoot "tools\\asr\\transcribe.py"
+$asrCache = Join-Path $projectRoot "tools\\asr\\cache"
+$asrModelDir = Join-Path $projectRoot "tools\asr\models\vosk-zh-cn-small"
 New-Item -ItemType Directory -Force -Path $runLogDir | Out-Null
 
 if (Get-NetTCPConnection -State Listen -LocalPort 8080 -ErrorAction SilentlyContinue) {
@@ -48,8 +53,13 @@ $backendOut = Join-Path $runLogDir "backend.out.log"
 $backendErr = Join-Path $runLogDir "backend.err.log"
 $command = @"
 Set-Location '$backendDir'
+if (Test-Path '$envFile') { . '$envFile' }
 `$env:VIDEOAI_DB_PASSWORD = '$DbPassword'
 `$env:VIDEOAI_FFMPEG = '$ffmpegCmd'
+`$env:VIDEOAI_ASR_PYTHON = '$asrPython'
+`$env:VIDEOAI_ASR_SCRIPT = '$asrScript'
+`$env:VIDEOAI_ASR_CACHE_DIR = '$asrCache'
+if (Test-Path '$asrModelDir') { `$env:VIDEOAI_ASR_MODEL = '$asrModelDir' }
 & '$mvnCmd' spring-boot:run
 "@
 

@@ -1,5 +1,6 @@
 package com.videoai.config;
 
+import com.videoai.common.util.AiUrlUtils;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -15,7 +16,7 @@ public class LangChainConfig {
     @ConditionalOnProperty(prefix = "videoai.ai", name = "mock", havingValue = "false")
     public ChatLanguageModel chatLanguageModel(VideoAiProperties properties) {
         return OpenAiChatModel.builder()
-                .baseUrl(properties.getAi().getBaseUrl())
+                .baseUrl(AiUrlUtils.normalizeCompatibleBaseUrl(properties.getAi().getBaseUrl()))
                 .apiKey(properties.getAi().getApiKey())
                 .modelName(properties.getAi().getModel())
                 .timeout(Duration.ofSeconds(properties.getAi().getTimeoutSeconds()))
