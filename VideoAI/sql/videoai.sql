@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS `user` (
   `nickname` VARCHAR(64) NOT NULL COMMENT '昵称',
   `status` TINYINT NOT NULL DEFAULT 1 COMMENT '状态',
   `quota_limit` INT NOT NULL DEFAULT 10000 COMMENT '用户 AI token 配额',
+  `daily_quota_limit` INT NOT NULL DEFAULT 100 COMMENT '每日 AI 调用次数上限',
+  `monthly_quota_limit` INT NOT NULL DEFAULT 3000 COMMENT '每月 AI 调用次数上限',
   `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deleted` TINYINT NOT NULL DEFAULT 0,
@@ -200,5 +202,6 @@ CREATE TABLE IF NOT EXISTS `task_event_log` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='任务事件日志表';
 
 INSERT INTO `user` (`user_no`, `username`, `password`, `nickname`, `status`, `quota_limit`)
-VALUES ('U202604170001', 'demo_user', '$2a$10$lUKUzWgudVPHiZo2E6lKEOczdqRqcAfIIVLWfJcR2yMU1Mt6DHPbi', '演示账号', 1, 10000)
-ON DUPLICATE KEY UPDATE `nickname` = VALUES(`nickname`);
+VALUES ('U202604170001', 'demo_user', '$2a$10$lUKUzWgudVPHiZo2E6lKEOczdqRqcAfIIVLWfJcR2yMU1Mt6DHPbi', 'Demo User', 1, 10000)
+ON DUPLICATE KEY UPDATE
+  `nickname` = VALUES(`nickname`);

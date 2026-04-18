@@ -169,6 +169,32 @@ VideoAI/
 
 ## 启动步骤
 
+### 推荐：本地一键启动（无 Docker）
+
+项目已经内置本地脚本，适合没有 Docker 的机器：
+
+```powershell
+cd E:\Video\VideoAI
+powershell -ExecutionPolicy Bypass -File .\tools\prepare-tools.ps1
+powershell -ExecutionPolicy Bypass -File .\tools\start-all.ps1 -DbPassword gao200039
+```
+
+这套脚本会优先把 Redis 和 FFmpeg 放到 `VideoAI/tools` 目录下，不占用 C 盘。
+
+停止：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\stop-all.ps1
+```
+
+说明：
+
+- 本地 Redis 已放在 [tools/redis](/E:/Video/VideoAI/tools/redis)
+- 数据库初始化脚本是 [tools/init-db.ps1](/E:/Video/VideoAI/tools/init-db.ps1)
+- 后端和前端启动脚本分别是：
+  - [tools/start-backend.ps1](/E:/Video/VideoAI/tools/start-backend.ps1)
+  - [tools/start-frontend.ps1](/E:/Video/VideoAI/tools/start-frontend.ps1)
+
 ### 1. 初始化数据库
 
 执行：
@@ -287,4 +313,3 @@ npm run dev
 - 增加多模型路由与质量评估
 - 接入对象存储回调和死信队列处理
 - 增加后台管理端与运维告警
-

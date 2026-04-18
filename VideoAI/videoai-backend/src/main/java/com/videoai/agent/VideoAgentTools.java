@@ -1,7 +1,6 @@
 package com.videoai.agent;
 
 import com.videoai.common.util.JsonUtils;
-import com.videoai.model.entity.VideoTask;
 import com.videoai.model.vo.SummaryVO;
 import com.videoai.model.vo.TaskEventVO;
 import com.videoai.model.vo.TaskStatusVO;
@@ -15,11 +14,10 @@ import dev.langchain4j.agent.tool.Tool;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @Component
 public class VideoAgentTools {
@@ -34,95 +32,92 @@ public class VideoAgentTools {
         this.ragService = ragService;
     }
 
-    @Tool("查询视频基础信息")
+    @Tool("Query video basic info for a task")
     public String getVideoBasicInfo(Long taskId) {
         VideoTaskDetailVO detail = videoTaskService.detail(null, taskId);
         return JsonUtils.toJson(detail);
     }
 
-    @Tool("查询任务状态")
+    @Tool("Query current task status and progress")
     public String getTaskStatus(Long taskId) {
         TaskStatusVO status = videoTaskService.status(null, taskId);
         return JsonUtils.toJson(status);
     }
 
-    @Tool("查询任务事件日志")
+    @Tool("Query task event timeline")
     public String getTaskEvents(Long taskId) {
-        List<TaskEventVO> events = videoTaskService.events(null, taskId);
-        return JsonUtils.toJson(events);
+        return JsonUtils.toJson(videoTaskService.events(null, taskId));
     }
 
-    @Tool("查询完整转写文本")
+    @Tool("Query full transcript text")
     public String getTranscript(Long taskId) {
         TranscriptVO transcript = videoResultService.getTranscript(null, taskId);
         return transcript == null ? "" : transcript.getTranscriptText();
     }
 
-    @Tool("查询 AI 摘要结果")
+    @Tool("Query structured AI summary")
     public String getSummary(Long taskId) {
         SummaryVO summary = videoResultService.getSummary(null, taskId);
         return JsonUtils.toJson(summary);
     }
 
-    @Tool("检索与问题相关的视频片段")
+    @Tool("Search relevant transcript segments for the question")
     public String searchSegments(Long taskId, String question) {
-        // 使用混合检索,提升召回准确率
-        List<TranscriptSegmentVO> segments = ragService.hybridRetrieve(taskId, question, 5);
-        return JsonUtils.toJson(segments);
+        return JsonUtils.toJson(ragService.hybridRetrieve(taskId, question, 5));
     }
 
-    @Tool("按关键词定位视频片段")
+    @Tool("Locate transcript segments by keyword")
     public String locateByKeyword(Long taskId, String keyword) {
-        List<TranscriptSegmentVO> segments = ragService.locateByKeyword(taskId, keyword, 5);
-        return JsonUtils.toJson(segments);
+        return JsonUtils.toJson(ragService.locateByKeyword(taskId, keyword, 5));
     }
 
-    @Tool("查询任务失败原因和建议")
+    @Tool("Diagnose task failure reason and provide suggestions")
     public String getTaskFailureReason(Long taskId) {
         VideoTaskDetailVO detail = videoTaskService.detail(null, taskId);
-        if (detail == null || !"FAILED".equals(detail.getStatusCode())) {
-            return "任务未失败,当前状态: " + (detail == null ? "未知" : detail.getStatusCode());
+        if (detail == null) {
+            return "Task not found.";
         }
+        if (!"FAILED".equals(detail.getStatusCode())) {
+            return "Task is not failed. Current status: " + detail.getStatusCode();
+        }
+
         List<TaskEventVO> events = videoTaskService.events(null, taskId);
-        TaskEventVO lastError = events.stream()
-                .filter(e -> "ERROR".equals(e.getEventType()))
+        TaskEventVO latestFailure = events.stream()
+                .filter(event -> event.getSuccess() != null && event.getSuccess() == 0)
                 .reduce((first, second) -> second)
                 .orElse(null);
-        if (lastError == null) {
-            return "任务失败但未记录具体错误信息";
+        if (latestFailure == null) {
+            return "Task failed, but no explicit failure event was found.";
         }
-        return String.format(
-                "失败步骤: %s\n错误类型: %s\n错误详情: %s\n发生时间: %s\n建议: %s",
-                lastError.getCurrentStep(),
-                lastError.getEventType(),
-                lastError.getDetail(),
-                lastError.getCreateTime(),
-                generateSuggestion(lastError)
-        );
+
+        Map<String, Object> diagnosis = new LinkedHashMap<>();
+        diagnosis.put("step", latestFailure.getStep());
+        diagnosis.put("eventType", latestFailure.getEventType());
+        diagnosis.put("detail", latestFailure.getDetail());
+        diagnosis.put("occurredAt", latestFailure.getCreateTime());
+        diagnosis.put("suggestion", buildSuggestion(latestFailure.getDetail()));
+        return JsonUtils.toJson(diagnosis);
     }
 
-    @Tool("获取任务处理耗时统计")
+    @Tool("Analyze task duration statistics by stage")
     public String getTaskDurationStats(Long taskId) {
         List<TaskEventVO> events = videoTaskService.events(null, taskId);
-        if (events.isEmpty()) {
-            return "暂无事件记录";
+        if (events.size() < 2) {
+            return "No enough events for duration analysis.";
         }
-        
-        Map<String, Long> stepDurations = new HashMap<>();
+
+        Map<String, Long> stepDurations = new LinkedHashMap<>();
         for (int i = 1; i < events.size(); i++) {
-            TaskEventVO prev = events.get(i - 1);
-            TaskEventVO curr = events.get(i);
-            long duration = Duration.between(prev.getCreateTime(), curr.getCreateTime()).toSeconds();
-            stepDurations.put(prev.getCurrentStep() + "->" + curr.getCurrentStep(), duration);
+            TaskEventVO previous = events.get(i - 1);
+            TaskEventVO current = events.get(i);
+            long seconds = Duration.between(previous.getCreateTime(), current.getCreateTime()).toSeconds();
+            stepDurations.put(previous.getStep() + " -> " + current.getStep(), seconds);
         }
-        
-        long totalDuration = Duration.between(
-                events.get(0).getCreateTime(),
-                events.get(events.size() - 1).getCreateTime()
-        ).toSeconds();
-        
-        Map<String, Object> stats = new HashMap<>();
-        stats.put("totalSeconds", totalDuration);
+
+        long totalSeconds = Duration.between(events.get(0).getCreateTime(), events.get(events.size() - 1).getCreateTime())
+                .toSeconds();
+        Map<String, Object> stats = new LinkedHashMap<>();
+        stats.put("totalSeconds", totalSeconds);
         stats.put("stepDurations", stepDurations);
         return JsonUtils.toJson(stats);
     }
@@ -132,26 +127,36 @@ public class VideoAgentTools {
         result.put("videoInfo", videoTaskService.detail(null, taskId));
         result.put("status", videoTaskService.status(null, taskId));
         result.put("summary", videoResultService.getSummary(null, taskId));
-        result.put("segments", ragService.retrieve(taskId, keyword == null ? "视频" : keyword, 5));
-        result.put("keywordHit", ragService.locateByKeyword(taskId, keyword == null ? "Agent" : keyword, 5));
+        result.put("segments", ragService.hybridRetrieve(taskId, keyword == null ? "video" : keyword, 5));
+        result.put("keywordHit", ragService.locateByKeyword(taskId, keyword == null ? "agent" : keyword, 5));
+        result.put("failureDiagnosis", getTaskFailureReason(taskId));
+        result.put("durationStats", getTaskDurationStats(taskId));
         return result;
     }
 
-    private String generateSuggestion(TaskEventVO errorEvent) {
-        String detail = errorEvent.getDetail().toLowerCase();
-        if (detail.contains("timeout") || detail.contains("超时")) {
-            return "建议检查网络连接或尝试手动重试,可能是第三方服务响应缓慢";
-        } else if (detail.contains("format") || detail.contains("格式")) {
-            return "建议检查视频文件格式是否支持,可尝试转换为 MP4 格式后重新上传";
-        } else if (detail.contains("asr") || detail.contains("转写")) {
-            return "ASR 服务调用失败,建议检查音频质量或稍后重试";
-        } else if (detail.contains("summar") || detail.contains("摘要")) {
-            return "AI 摘要生成失败,可能是文本过长或 API 限流,建议稍后重试";
-        } else if (detail.contains("upload") || detail.contains("上传")) {
-            return "文件上传失败,建议检查网络连接或文件大小限制";
-        } else if (detail.contains("ffmpeg") || detail.contains("音频提取")) {
-            return "音频提取失败,可能是视频编码不支持,建议转换格式后重试";
+    private String buildSuggestion(String detail) {
+        if (detail == null || detail.isBlank()) {
+            return "Check task event logs and retry the task if needed.";
         }
-        return "建议查看完整事件日志,或联系技术支持";
+        String lower = detail.toLowerCase();
+        if (lower.contains("timeout")) {
+            return "Possible third-party timeout. Retry later or increase timeout/retry settings.";
+        }
+        if (lower.contains("format") || lower.contains("codec")) {
+            return "The media format may be unsupported. Try converting the video to MP4/H.264 first.";
+        }
+        if (lower.contains("asr") || lower.contains("transcrib")) {
+            return "ASR processing failed. Check audio quality and retry the task.";
+        }
+        if (lower.contains("summar")) {
+            return "Summary generation failed. Check model availability, token limits, or retry later.";
+        }
+        if (lower.contains("upload")) {
+            return "Upload chain may be incomplete. Verify chunk merge result and object storage availability.";
+        }
+        if (lower.contains("ffmpeg") || lower.contains("audio")) {
+            return "Audio extraction failed. Check FFmpeg path and source video encoding.";
+        }
+        return "Check the latest task event details and retry the task if the dependency is temporarily unavailable.";
     }
 }

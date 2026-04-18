@@ -50,22 +50,20 @@ public class SummaryServiceImpl implements SummaryService {
         Object cache = redisTemplate.opsForValue().get(cacheKey);
         if (cache instanceof String json && !json.isBlank()) {
             SummaryResult result = JsonUtils.fromJson(json, SummaryResult.class);
-            usageService.recordUsage(task.getUserId(), task.getId(), AiBizTypeEnum.SUMMARY, "summary-" + task.getFileId(),
-                    result.getModelName(), 0, 0, 5L, true, true, null);
+            usageService.recordUsage(task.getUserId(), task.getId(), AiBizTypeEnum.SUMMARY,
+                    "summary-" + task.getFileId(), result.getModelName(), 0, 0, 5L, true, true, null);
             return result;
         }
-        
+
         SummaryResult result;
         if (!properties.getAi().isMock() && langChainAgentRunner != null) {
-            // 使用 SummaryAgent 智能体生成结构化摘要
             SummaryVO summaryVO = langChainAgentRunner.generateSummary(transcript.getTranscriptText());
-            result = convertToSummaryResult(summaryVO, task);
+            result = convertToSummaryResult(summaryVO, transcript.getTranscriptText());
         } else {
-            // 降级到传统方式
             result = RetryUtils.execute(() -> deepSeekClient.summarize(transcript.getTranscriptText()),
                     properties.getAi().getMaxRetries(), 400L);
         }
-        
+
         VideoSummary summary = new VideoSummary();
         summary.setTaskId(task.getId());
         summary.setFileId(task.getFileId());
@@ -81,29 +79,44 @@ public class SummaryServiceImpl implements SummaryService {
         summary.setTotalTokens(result.getTotalTokens());
         summary.setCostTimeMs(result.getDurationMs());
         videoSummaryMapper.insert(summary);
+
         redisTemplate.opsForValue().set(cacheKey, JsonUtils.toJson(result), Duration.ofHours(12));
-        usageService.recordUsage(task.getUserId(), task.getId(), AiBizTypeEnum.SUMMARY, "summary-" + task.getFileId(),
-                result.getModelName(), result.getPromptTokens(), result.getCompletionTokens(),
-                result.getDurationMs(), false, true, null);
+        usageService.recordUsage(task.getUserId(), task.getId(), AiBizTypeEnum.SUMMARY,
+                "summary-" + task.getFileId(), result.getModelName(), result.getPromptTokens(),
+                result.getCompletionTokens(), result.getDurationMs(), false, true, null);
         return result;
     }
-    
-    private SummaryResult convertToSummaryResult(SummaryVO summaryVO, VideoTask task) {
-        SummaryResult result = new SummaryResult();
-        result.setTitle(summaryVO.getTitle());
-        result.setSummary(summaryVO.getSummary());
-        result.setOutline(summaryVO.getOutline());
-        result.setKeywords(summaryVO.getKeywords());
-        result.setHighlights(summaryVO.getHighlights());
-        result.setQaSuggestions(summaryVO.getQaSuggestions());
-        result.setModelName(properties.getAi().getModel());
-        // 估算 Token 用量
-        int inputTokens = task.getTranscriptText() != null ? task.getTranscriptText().length() / 4 : 0;
-        int outputTokens = summaryVO.getSummary() != null ? summaryVO.getSummary().length() / 4 : 0;
-        result.setPromptTokens(inputTokens);
-        result.setCompletionTokens(outputTokens);
-        result.setTotalTokens(inputTokens + outputTokens);
-        result.setDurationMs(3000L); // 模拟耗时
-        return result;
+
+    private SummaryResult convertToSummaryResult(SummaryVO summaryVO, String transcriptText) {
+        int inputTokens = transcriptText == null ? 0 : Math.max(1, transcriptText.length() / 4);
+        int outputTokens = estimateOutputTokens(summaryVO);
+        return SummaryResult.builder()
+                .title(summaryVO.getTitle())
+                .summary(summaryVO.getSummary())
+                .outline(summaryVO.getOutline())
+                .keywords(summaryVO.getKeywords())
+                .highlights(summaryVO.getHighlights())
+                .qaSuggestions(summaryVO.getQaSuggestions())
+                .modelName(properties.getAi().getModel())
+                .promptTokens(inputTokens)
+                .completionTokens(outputTokens)
+                .totalTokens(inputTokens + outputTokens)
+                .durationMs(3000L)
+                .build();
+    }
+
+    private int estimateOutputTokens(SummaryVO summaryVO) {
+        int length = 0;
+        length += safeLength(summaryVO.getTitle());
+        length += safeLength(summaryVO.getSummary());
+        length += summaryVO.getOutline() == null ? 0 : summaryVO.getOutline().stream().mapToInt(this::safeLength).sum();
+        length += summaryVO.getKeywords() == null ? 0 : summaryVO.getKeywords().stream().mapToInt(this::safeLength).sum();
+        length += summaryVO.getHighlights() == null ? 0 : summaryVO.getHighlights().stream().mapToInt(this::safeLength).sum();
+        length += summaryVO.getQaSuggestions() == null ? 0 : summaryVO.getQaSuggestions().stream().mapToInt(this::safeLength).sum();
+        return Math.max(1, length / 4);
+    }
+
+    private int safeLength(String value) {
+        return value == null ? 0 : value.length();
     }
 }

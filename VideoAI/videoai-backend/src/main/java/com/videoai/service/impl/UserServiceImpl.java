@@ -42,6 +42,8 @@ public class UserServiceImpl implements UserService {
         user.setNickname(request.getNickname());
         user.setStatus(1);
         user.setQuotaLimit(10000);
+        user.setDailyQuotaLimit(100);
+        user.setMonthlyQuotaLimit(3000);
         userMapper.insert(user);
         return buildLoginVO(user);
     }

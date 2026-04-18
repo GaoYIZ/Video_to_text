@@ -11,22 +11,24 @@ import com.videoai.model.entity.AiUsageRecord;
 import com.videoai.model.entity.User;
 import com.videoai.model.enums.AiBizTypeEnum;
 import com.videoai.model.vo.UsageOverviewVO;
-import com.videoai.model.vo.UserQuotaVO;
 import com.videoai.model.vo.UsageStatsVO;
+import com.videoai.model.vo.UserQuotaVO;
 import com.videoai.service.UsageService;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
 public class UsageServiceImpl implements UsageService {
+
+    private static final BigDecimal INPUT_TOKEN_PRICE_PER_K = new BigDecimal("0.002");
+    private static final BigDecimal OUTPUT_TOKEN_PRICE_PER_K = new BigDecimal("0.008");
 
     private final AiUsageRecordMapper aiUsageRecordMapper;
     private final UserMapper userMapper;
@@ -59,105 +61,62 @@ public class UsageServiceImpl implements UsageService {
     }
 
     @Override
+    public void checkQuota(Long userId) {
+        Long currentUserId = userId == null ? LoginUserContext.getUserId() : userId;
+        User user = requireUser(currentUserId);
+        UserQuotaVO quota = getUserQuota(user.getId());
+        if (quota.getRemainingToday() <= 0) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "今日 AI 调用次数已达上限");
+        }
+        if (quota.getRemainingMonth() <= 0) {
+            throw new BusinessException(ErrorCode.FORBIDDEN, "本月 AI 调用次数已达上限");
+        }
+    }
+
+    @Override
     public UsageOverviewVO overview(Long userId) {
-        User user = userMapper.selectById(userId);
-        List<AiUsageRecord> records = aiUsageRecordMapper.selectList(
-                Wrappers.<AiUsageRecord>lambdaQuery().eq(AiUsageRecord::getUserId, userId));
+        User user = requireUser(userId);
+        List<AiUsageRecord> records = listByUser(userId);
         int totalCalls = records.size();
-        int totalTokens = records.stream().mapToInt(item -> item.getTotalTokens() == null ? 0 : item.getTotalTokens()).sum();
-        int summaryCalls = (int) records.stream().filter(item -> AiBizTypeEnum.SUMMARY.getCode().equals(item.getBizType())).count();
-        int qaCalls = (int) records.stream().filter(item ->
-                AiBizTypeEnum.QA.getCode().equals(item.getBizType()) || AiBizTypeEnum.AGENT_QA.getCode().equals(item.getBizType())).count();
-        Integer taskCount = Math.toIntExact(videoTaskMapper.selectCount(
-                Wrappers.<com.videoai.model.entity.VideoTask>lambdaQuery().eq(com.videoai.model.entity.VideoTask::getUserId, userId)));
+        int totalTokens = records.stream().mapToInt(item -> safeInt(item.getTotalTokens())).sum();
+        int summaryCalls = (int) records.stream()
+                .filter(item -> AiBizTypeEnum.SUMMARY.getCode().equals(item.getBizType()))
+                .count();
+        int qaCalls = (int) records.stream()
+                .filter(item -> AiBizTypeEnum.QA.getCode().equals(item.getBizType())
+                        || AiBizTypeEnum.AGENT_QA.getCode().equals(item.getBizType()))
+                .count();
+        int taskCount = Math.toIntExact(videoTaskMapper.selectCount(
+                Wrappers.<com.videoai.model.entity.VideoTask>lambdaQuery()
+                        .eq(com.videoai.model.entity.VideoTask::getUserId, userId)));
         return UsageOverviewVO.builder()
                 .totalCalls(totalCalls)
                 .totalTokens(totalTokens)
                 .summaryCalls(summaryCalls)
                 .qaCalls(qaCalls)
                 .taskCount(taskCount)
-                .quotaLimit(user == null ? 0 : user.getQuotaLimit())
+                .quotaLimit(user.getMonthlyQuotaLimit() == null ? safeInt(user.getQuotaLimit()) : user.getMonthlyQuotaLimit())
                 .build();
     }
 
     @Override
-    public void checkQuota(Long userId) {
-        Long currentUserId = userId == null ? LoginUserContext.getUserId() : userId;
-        User user = userMapper.selectById(currentUserId);
-        if (user == null) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED);
-        }
-        
-        // 检查每日配额
-        LocalDate today = LocalDate.now();
-        LocalDateTime startOfDay = today.atStartOfDay();
-        LocalDateTime endOfDay = today.plusDays(1).atStartOfDay();
-        
-        long todayCalls = aiUsageRecordMapper.selectCount(
-                Wrappers.<AiUsageRecord>lambdaQuery()
-                        .eq(AiUsageRecord::getUserId, currentUserId)
-                        .ge(AiUsageRecord::getCreateTime, startOfDay)
-                        .lt(AiUsageRecord::getCreateTime, endOfDay)
-        );
-        
-        // 默认每日限制 100 次调用
-        int dailyLimit = user.getDailyQuotaLimit() != null ? user.getDailyQuotaLimit() : 100;
-        if (todayCalls >= dailyLimit) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "今日 AI 调用次数已用尽(" + dailyLimit + "次/天)");
-        }
-        
-        // 检查每月配额
-        LocalDate firstDayOfMonth = today.withDayOfMonth(1);
-        LocalDateTime startOfMonth = firstDayOfMonth.atStartOfDay();
-        LocalDateTime endOfMonth = firstDayOfMonth.plusMonths(1).atStartOfDay();
-        
-        long monthCalls = aiUsageRecordMapper.selectCount(
-                Wrappers.<AiUsageRecord>lambdaQuery()
-                        .eq(AiUsageRecord::getUserId, currentUserId)
-                        .ge(AiUsageRecord::getCreateTime, startOfMonth)
-                        .lt(AiUsageRecord::getCreateTime, endOfMonth)
-        );
-        
-        // 默认每月限制 3000 次调用
-        int monthlyLimit = user.getMonthlyQuotaLimit() != null ? user.getMonthlyQuotaLimit() : 3000;
-        if (monthCalls >= monthlyLimit) {
-            throw new BusinessException(ErrorCode.FORBIDDEN, "本月 AI 调用次数已用尽(" + monthlyLimit + "次/月)");
-        }
-    }
-
-    @Override
     public UserQuotaVO getUserQuota(Long userId) {
-        User user = userMapper.selectById(userId);
-        if (user == null) {
-            throw new BusinessException(ErrorCode.UNAUTHORIZED);
-        }
-        
+        User user = requireUser(userId);
         LocalDate today = LocalDate.now();
         LocalDate firstDayOfMonth = today.withDayOfMonth(1);
-        
-        // 统计今日使用
-        LocalDateTime startOfDay = today.atStartOfDay();
-        LocalDateTime endOfDay = today.plusDays(1).atStartOfDay();
-        long todayUsed = aiUsageRecordMapper.selectCount(
-                Wrappers.<AiUsageRecord>lambdaQuery()
-                        .eq(AiUsageRecord::getUserId, userId)
-                        .ge(AiUsageRecord::getCreateTime, startOfDay)
-                        .lt(AiUsageRecord::getCreateTime, endOfDay)
-        );
-        
-        // 统计本月使用
-        LocalDateTime startOfMonth = firstDayOfMonth.atStartOfDay();
-        LocalDateTime endOfMonth = firstDayOfMonth.plusMonths(1).atStartOfDay();
-        long monthUsed = aiUsageRecordMapper.selectCount(
-                Wrappers.<AiUsageRecord>lambdaQuery()
-                        .eq(AiUsageRecord::getUserId, userId)
-                        .ge(AiUsageRecord::getCreateTime, startOfMonth)
-                        .lt(AiUsageRecord::getCreateTime, endOfMonth)
-        );
-        
-        int dailyLimit = user.getDailyQuotaLimit() != null ? user.getDailyQuotaLimit() : 100;
-        int monthlyLimit = user.getMonthlyQuotaLimit() != null ? user.getMonthlyQuotaLimit() : 3000;
-        
+
+        long todayUsed = aiUsageRecordMapper.selectCount(Wrappers.<AiUsageRecord>lambdaQuery()
+                .eq(AiUsageRecord::getUserId, userId)
+                .ge(AiUsageRecord::getCreateTime, today.atStartOfDay())
+                .lt(AiUsageRecord::getCreateTime, today.plusDays(1).atStartOfDay()));
+
+        long monthUsed = aiUsageRecordMapper.selectCount(Wrappers.<AiUsageRecord>lambdaQuery()
+                .eq(AiUsageRecord::getUserId, userId)
+                .ge(AiUsageRecord::getCreateTime, firstDayOfMonth.atStartOfDay())
+                .lt(AiUsageRecord::getCreateTime, firstDayOfMonth.plusMonths(1).atStartOfDay()));
+
+        int dailyLimit = user.getDailyQuotaLimit() == null ? 100 : user.getDailyQuotaLimit();
+        int monthlyLimit = user.getMonthlyQuotaLimit() == null ? 3000 : user.getMonthlyQuotaLimit();
         return UserQuotaVO.builder()
                 .userId(userId)
                 .dailyLimit(dailyLimit)
@@ -172,27 +131,16 @@ public class UsageServiceImpl implements UsageService {
 
     @Override
     public UsageStatsVO getUsageStats(Long userId, String period) {
-        if ("day".equals(period)) {
-            return getDailyUsage(userId);
-        } else if ("month".equals(period)) {
-            return getMonthlyUsage(userId);
-        }
-        return getDailyUsage(userId); // 默认返回今日统计
+        return "month".equalsIgnoreCase(period) ? getMonthlyUsage(userId) : getDailyUsage(userId);
     }
 
     @Override
     public UsageStatsVO getDailyUsage(Long userId) {
         LocalDate today = LocalDate.now();
-        LocalDateTime startOfDay = today.atStartOfDay();
-        LocalDateTime endOfDay = today.plusDays(1).atStartOfDay();
-        
-        List<AiUsageRecord> records = aiUsageRecordMapper.selectList(
-                Wrappers.<AiUsageRecord>lambdaQuery()
-                        .eq(AiUsageRecord::getUserId, userId)
-                        .ge(AiUsageRecord::getCreateTime, startOfDay)
-                        .lt(AiUsageRecord::getCreateTime, endOfDay)
-        );
-        
+        List<AiUsageRecord> records = aiUsageRecordMapper.selectList(Wrappers.<AiUsageRecord>lambdaQuery()
+                .eq(AiUsageRecord::getUserId, userId)
+                .ge(AiUsageRecord::getCreateTime, today.atStartOfDay())
+                .lt(AiUsageRecord::getCreateTime, today.plusDays(1).atStartOfDay()));
         return buildUsageStats(userId, "day", records);
     }
 
@@ -200,66 +148,44 @@ public class UsageServiceImpl implements UsageService {
     public UsageStatsVO getMonthlyUsage(Long userId) {
         LocalDate today = LocalDate.now();
         LocalDate firstDayOfMonth = today.withDayOfMonth(1);
-        LocalDateTime startOfMonth = firstDayOfMonth.atStartOfDay();
-        LocalDateTime endOfMonth = firstDayOfMonth.plusMonths(1).atStartOfDay();
-        
-        List<AiUsageRecord> records = aiUsageRecordMapper.selectList(
-                Wrappers.<AiUsageRecord>lambdaQuery()
-                        .eq(AiUsageRecord::getUserId, userId)
-                        .ge(AiUsageRecord::getCreateTime, startOfMonth)
-                        .lt(AiUsageRecord::getCreateTime, endOfMonth)
-        );
-        
+        List<AiUsageRecord> records = aiUsageRecordMapper.selectList(Wrappers.<AiUsageRecord>lambdaQuery()
+                .eq(AiUsageRecord::getUserId, userId)
+                .ge(AiUsageRecord::getCreateTime, firstDayOfMonth.atStartOfDay())
+                .lt(AiUsageRecord::getCreateTime, firstDayOfMonth.plusMonths(1).atStartOfDay()));
         return buildUsageStats(userId, "month", records);
     }
 
-    /**
-     * 构建使用统计数据
-     */
     private UsageStatsVO buildUsageStats(Long userId, String period, List<AiUsageRecord> records) {
         int totalCalls = records.size();
-        int totalInputTokens = records.stream().mapToInt(r -> r.getPromptTokens() == null ? 0 : r.getPromptTokens()).sum();
-        int totalOutputTokens = records.stream().mapToInt(r -> r.getCompletionTokens() == null ? 0 : r.getCompletionTokens()).sum();
+        int totalInputTokens = records.stream().mapToInt(record -> safeInt(record.getPromptTokens())).sum();
+        int totalOutputTokens = records.stream().mapToInt(record -> safeInt(record.getCompletionTokens())).sum();
         int totalTokens = totalInputTokens + totalOutputTokens;
-        
-        // 估算费用(DeepSeek 价格: 输入 0.002元/K tokens, 输出 0.008元/K tokens)
+
         BigDecimal estimatedCost = BigDecimal.valueOf(totalInputTokens)
-                .multiply(BigDecimal.valueOf(0.002))
-                .divide(BigDecimal.valueOf(1000), 4, BigDecimal.ROUND_HALF_UP)
+                .multiply(INPUT_TOKEN_PRICE_PER_K)
+                .divide(BigDecimal.valueOf(1000), 6, RoundingMode.HALF_UP)
                 .add(BigDecimal.valueOf(totalOutputTokens)
-                        .multiply(BigDecimal.valueOf(0.008))
-                        .divide(BigDecimal.valueOf(1000), 4, BigDecimal.ROUND_HALF_UP));
-        
-        // 平均响应时间
-        Long avgResponseTime = records.stream()
-                .mapToLong(r -> r.getDurationMs() == null ? 0 : r.getDurationMs())
+                        .multiply(OUTPUT_TOKEN_PRICE_PER_K)
+                        .divide(BigDecimal.valueOf(1000), 6, RoundingMode.HALF_UP));
+
+        long avgResponseTime = Math.round(records.stream()
+                .mapToLong(record -> record.getDurationMs() == null ? 0L : record.getDurationMs())
                 .average()
-                .orElse(0.0)
-                .longValue();
-        
-        // 缓存命中率
-        long cacheHits = records.stream().filter(r -> r.getHitCache() != null && r.getHitCache() == 1).count();
-        double cacheHitRate = totalCalls > 0 ? (double) cacheHits / totalCalls * 100 : 0.0;
-        
-        // 成功率
-        long successCount = records.stream().filter(r -> r.getSuccess() != null && r.getSuccess() == 1).count();
-        double successRate = totalCalls > 0 ? (double) successCount / totalCalls * 100 : 0.0;
-        
-        // 按业务类型统计
+                .orElse(0D));
+
+        long cacheHits = records.stream().filter(record -> record.getHitCache() != null && record.getHitCache() == 1).count();
+        long successCount = records.stream().filter(record -> record.getSuccess() != null && record.getSuccess() == 1).count();
+        double cacheHitRate = totalCalls == 0 ? 0D : cacheHits * 100D / totalCalls;
+        double successRate = totalCalls == 0 ? 0D : successCount * 100D / totalCalls;
+
         Map<String, Integer> callsByBizType = records.stream()
-                .collect(Collectors.groupingBy(
-                        AiUsageRecord::getBizType,
-                        Collectors.collectingAndThen(Collectors.counting(), Long::intValue)
-                ));
-        
-        // 按模型统计
+                .collect(Collectors.groupingBy(AiUsageRecord::getBizType,
+                        Collectors.collectingAndThen(Collectors.counting(), Long::intValue)));
         Map<String, Integer> callsByModel = records.stream()
-                .filter(r -> r.getModelName() != null)
-                .collect(Collectors.groupingBy(
-                        AiUsageRecord::getModelName,
-                        Collectors.collectingAndThen(Collectors.counting(), Long::intValue)
-                ));
-        
+                .filter(record -> record.getModelName() != null && !record.getModelName().isBlank())
+                .collect(Collectors.groupingBy(AiUsageRecord::getModelName,
+                        Collectors.collectingAndThen(Collectors.counting(), Long::intValue)));
+
         return UsageStatsVO.builder()
                 .userId(userId)
                 .period(period)
@@ -269,10 +195,31 @@ public class UsageServiceImpl implements UsageService {
                 .totalTokens(totalTokens)
                 .estimatedCost(estimatedCost)
                 .avgResponseTimeMs(avgResponseTime)
-                .cacheHitRate(Math.round(cacheHitRate * 100.0) / 100.0)
-                .successRate(Math.round(successRate * 100.0) / 100.0)
+                .cacheHitRate(round2(cacheHitRate))
+                .successRate(round2(successRate))
                 .callsByBizType(callsByBizType)
                 .callsByModel(callsByModel)
                 .build();
+    }
+
+    private User requireUser(Long userId) {
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BusinessException(ErrorCode.UNAUTHORIZED);
+        }
+        return user;
+    }
+
+    private List<AiUsageRecord> listByUser(Long userId) {
+        return aiUsageRecordMapper.selectList(Wrappers.<AiUsageRecord>lambdaQuery()
+                .eq(AiUsageRecord::getUserId, userId));
+    }
+
+    private int safeInt(Integer value) {
+        return value == null ? 0 : value;
+    }
+
+    private double round2(double value) {
+        return Math.round(value * 100D) / 100D;
     }
 }

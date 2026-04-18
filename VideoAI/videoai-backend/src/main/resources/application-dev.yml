@@ -1,8 +1,8 @@
 spring:
   datasource:
     url: jdbc:mysql://127.0.0.1:3306/videoai?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
-    username: root
-    password: gao200039
+    username: ${VIDEOAI_DB_USERNAME:root}
+    password: ${VIDEOAI_DB_PASSWORD:gao200039}
   data:
     redis:
       host: 127.0.0.1
@@ -29,7 +29,7 @@ videoai:
     local-base-path: data/storage
     temp-base-path: data/temp
   ffmpeg:
-    command: ffmpeg
+    command: ${VIDEOAI_FFMPEG:ffmpeg}
   ai:
     mock: true
     base-url: https://api.deepseek.com
