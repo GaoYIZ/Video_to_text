@@ -1,0 +1,111 @@
+:root {
+  --bg: #0d1117;
+  --bg-soft: #131a22;
+  --panel: rgba(255, 255, 255, 0.05);
+  --panel-strong: rgba(255, 255, 255, 0.08);
+  --line: rgba(255, 255, 255, 0.08);
+  --text: #f3efe6;
+  --muted: #9da6b4;
+  --accent: #f6b655;
+  --accent-soft: rgba(246, 182, 85, 0.18);
+  --success: #46c29d;
+  --danger: #f56c6c;
+  --shadow: 0 18px 60px rgba(0, 0, 0, 0.35);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  min-height: 100%;
+  background:
+    radial-gradient(circle at top left, rgba(246, 182, 85, 0.14), transparent 24%),
+    radial-gradient(circle at bottom right, rgba(80, 120, 255, 0.16), transparent 28%),
+    var(--bg);
+  color: var(--text);
+  font-family: 'Manrope', sans-serif;
+}
+
+body {
+  min-height: 100vh;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.mono {
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.page-shell {
+  padding: 28px;
+}
+
+.panel {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  backdrop-filter: blur(18px);
+}
+
+.section-title {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.section-subtitle {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.fade-in-up {
+  animation: fadeInUp 0.6s ease both;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.el-card {
+  background: transparent !important;
+  border: none !important;
+}
+
+.el-input__wrapper,
+.el-select__wrapper,
+.el-textarea__inner,
+.el-upload-dragger {
+  background: rgba(255, 255, 255, 0.03) !important;
+  box-shadow: none !important;
+  border-color: var(--line) !important;
+}
+
+.el-table {
+  --el-table-tr-bg-color: transparent;
+  --el-table-bg-color: transparent;
+  --el-table-border-color: var(--line);
+  --el-table-text-color: var(--text);
+  --el-table-header-text-color: var(--muted);
+  --el-table-header-bg-color: rgba(255, 255, 255, 0.02);
+}
+
+@media (max-width: 900px) {
+  .page-shell {
+    padding: 18px;
+  }
+}
