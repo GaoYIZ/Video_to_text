@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import dayjs from 'dayjs'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { agentApi, resultApi, taskApi } from '../api/modules'
 import type { SummaryData, TaskDetail, TranscriptData, TranscriptSegment } from '../types'
 import TaskStatusPill from '../components/TaskStatusPill.vue'
 import ChatPanel from '../components/ChatPanel.vue'
+import { formatDateTime, formatDuration, formatSegmentTime } from '../utils/format'
 
 const route = useRoute()
 const taskId = Number(route.params.id)
@@ -18,13 +18,8 @@ const debugResult = ref<Record<string, unknown> | null>(null)
 const loading = ref(false)
 let timer: number | null = null
 
-const formatTime = (time?: string) => (time ? dayjs(time).format('YYYY-MM-DD HH:mm:ss') : '-')
-const formatDuration = (ms?: number) => (ms ? `${(ms / 1000).toFixed(1)} 秒` : '-')
-
 const shouldPoll = computed(() => !detail.value || !['SUCCESS', 'FAILED'].includes(detail.value.statusCode))
 const transcriptPreview = computed(() => transcript.value?.transcriptText || '任务处理中，转写结果暂未生成。')
-const summaryHighlights = computed(() => summary.value?.highlights || [])
-const summaryQuestions = computed(() => summary.value?.qaSuggestions || [])
 
 const loadDetail = async () => {
   loading.value = true
@@ -64,10 +59,10 @@ onBeforeUnmount(() => {
   <div class="page-shell detail-page" v-loading="loading">
     <section class="detail-hero panel fade-in-up">
       <div>
-        <div class="mono hero-label">TASK DETAIL</div>
+        <div class="mono hero-kicker">TASK DETAIL</div>
         <h1 class="page-title">{{ detail?.videoTitle || '任务详情' }}</h1>
         <p class="page-copy">
-          这里聚合了当前任务的状态机、转写结果、结构化摘要、片段检索与多轮问答能力，适合完整演示视频理解链路。
+          这里把任务状态、结构化摘要、转写全文、片段召回和双通道问答全部放在同一页，适合完整讲述项目闭环。
         </p>
       </div>
 
@@ -76,11 +71,11 @@ onBeforeUnmount(() => {
         <div class="hero-meta">
           <div>
             <span>任务编号</span>
-            <strong class="mono">{{ detail?.taskNo || '-' }}</strong>
+            <strong>{{ detail?.taskNo || '-' }}</strong>
           </div>
           <div>
             <span>开始时间</span>
-            <strong>{{ formatTime(detail?.startedAt) }}</strong>
+            <strong>{{ formatDateTime(detail?.startedAt) }}</strong>
           </div>
           <div>
             <span>累计耗时</span>
@@ -88,7 +83,7 @@ onBeforeUnmount(() => {
           </div>
           <div>
             <span>文件 MD5</span>
-            <strong class="mono">{{ detail?.fileMd5 || '-' }}</strong>
+            <strong>{{ detail?.fileMd5 || '-' }}</strong>
           </div>
         </div>
       </div>
@@ -99,7 +94,7 @@ onBeforeUnmount(() => {
         <div class="section-header">
           <div>
             <h3 class="section-heading">{{ summary?.title || '结构化摘要' }}</h3>
-            <p class="section-description">SummaryAgent 输出摘要、大纲、关键词、亮点和追问建议。</p>
+            <p class="section-description">SummaryAgent 输出一句话总结、大纲、关键词、亮点和建议追问。</p>
           </div>
         </div>
 
@@ -119,15 +114,15 @@ onBeforeUnmount(() => {
           <div>
             <h4>亮点</h4>
             <ul>
-              <li v-for="item in summaryHighlights" :key="item">{{ item }}</li>
+              <li v-for="item in summary?.highlights || []" :key="item">{{ item }}</li>
             </ul>
           </div>
         </div>
 
-        <div v-if="summaryQuestions.length" class="follow-up">
-          <h4>可继续追问</h4>
+        <div v-if="summary?.qaSuggestions?.length" class="follow-up">
+          <h4>建议追问</h4>
           <div class="follow-up-list">
-            <span v-for="item in summaryQuestions" :key="item">{{ item }}</span>
+            <span v-for="item in summary.qaSuggestions" :key="item">{{ item }}</span>
           </div>
         </div>
       </div>
@@ -136,16 +131,16 @@ onBeforeUnmount(() => {
         <div class="section-header">
           <div>
             <h3 class="section-heading">状态时间线</h3>
-            <p class="section-description">通过事件日志观察任务状态流转，辅助定位失败节点和耗时阶段。</p>
+            <p class="section-description">事件日志会记录状态流转，用于定位失败原因与耗时阶段。</p>
           </div>
         </div>
 
         <div class="timeline-list">
-          <div v-for="event in detail?.events || []" :key="event.createTime + event.step" class="timeline-item">
-            <div class="timeline-time mono">{{ formatTime(event.createTime) }}</div>
+          <div v-for="event in detail?.events || []" :key="`${event.createTime}-${event.step}`" class="timeline-item">
+            <div class="mono timeline-time">{{ formatDateTime(event.createTime) }}</div>
             <div>
               <strong>{{ event.toStatus || event.step }}</strong>
-              <p>{{ event.detail || '无补充说明' }}</p>
+              <p>{{ event.detail || '无额外说明' }}</p>
             </div>
           </div>
         </div>
@@ -155,24 +150,22 @@ onBeforeUnmount(() => {
     <section class="panel transcript-board">
       <div class="section-header">
         <div>
-          <h3 class="section-heading">转写全文与片段检索</h3>
-          <p class="section-description">转写全文用于回看原始内容，片段列表用于 RAG 召回与时间定位。</p>
+          <h3 class="section-heading">转写全文与片段列表</h3>
+          <p class="section-description">全文用于回看原始内容，片段列表用于 RAG 召回与时间定位。</p>
         </div>
       </div>
 
       <div class="transcript-grid">
-        <div class="transcript-full panel-muted">
-          {{ transcriptPreview }}
-        </div>
+        <div class="transcript-full panel-muted">{{ transcriptPreview }}</div>
 
         <div class="segment-list">
           <div v-if="segments.length === 0" class="segment-empty panel-muted">任务处理中，片段结果暂未生成。</div>
           <div v-for="segment in segments" :key="segment.id" class="segment-item panel-muted">
-            <div class="segment-time mono">
-              {{ (segment.startTimeMs / 1000).toFixed(1) }}s - {{ (segment.endTimeMs / 1000).toFixed(1) }}s
+            <div class="mono segment-time">
+              {{ formatSegmentTime(segment.startTimeMs) }} - {{ formatSegmentTime(segment.endTimeMs) }}
             </div>
             <p>{{ segment.content }}</p>
-            <span>{{ segment.keywords || '未提取关键词' }}</span>
+            <span>{{ segment.keywords || '暂无关键词' }}</span>
           </div>
         </div>
       </div>
@@ -187,7 +180,7 @@ onBeforeUnmount(() => {
       <div class="section-header">
         <div>
           <h3 class="section-heading">Agent 调试输出</h3>
-          <p class="section-description">用于演示 Video Analysis Agent 可调用的工具信息与辅助诊断结果。</p>
+          <p class="section-description">用于展示 Video Analysis Agent 能访问到的工具与辅助诊断结果。</p>
         </div>
       </div>
       <pre>{{ JSON.stringify(debugResult, null, 2) }}</pre>
@@ -212,12 +205,12 @@ onBeforeUnmount(() => {
 
 .detail-hero {
   display: grid;
-  grid-template-columns: 1.1fr 0.9fr;
+  grid-template-columns: 1.08fr 0.92fr;
   gap: 24px;
 }
 
-.hero-label {
-  color: var(--accent);
+.hero-kicker {
+  color: var(--accent-strong);
   font-size: 12px;
   letter-spacing: 0.12em;
 }
@@ -237,18 +230,22 @@ onBeforeUnmount(() => {
 .hero-meta div {
   padding: 16px;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.035);
+  background: rgba(255, 255, 255, 0.72);
   border: 1px solid var(--line);
 }
 
-.hero-meta span {
+.hero-meta span,
+.segment-item span,
+.segment-time,
+.timeline-time {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
 }
 
 .hero-meta strong {
   display: block;
   margin-top: 8px;
+  color: var(--text);
   word-break: break-word;
 }
 
@@ -259,9 +256,9 @@ onBeforeUnmount(() => {
 }
 
 .summary-text {
-  margin: 20px 0 0;
+  margin: 18px 0 0;
   color: var(--text-soft);
-  line-height: 1.9;
+  line-height: 1.8;
   white-space: pre-wrap;
 }
 
@@ -280,9 +277,9 @@ onBeforeUnmount(() => {
 .follow-up-list span {
   padding: 8px 12px;
   border-radius: 999px;
-  background: rgba(255, 183, 97, 0.1);
-  border: 1px solid rgba(255, 183, 97, 0.2);
-  color: var(--accent);
+  background: rgba(111, 168, 255, 0.12);
+  border: 1px solid rgba(111, 168, 255, 0.22);
+  color: var(--accent-strong);
 }
 
 .summary-columns {
@@ -295,14 +292,13 @@ onBeforeUnmount(() => {
 .summary-columns h4,
 .follow-up h4 {
   margin: 0 0 12px;
-  font-size: 16px;
 }
 
 .summary-columns ul {
   margin: 0;
   padding-left: 18px;
   color: var(--text-soft);
-  line-height: 1.9;
+  line-height: 1.8;
 }
 
 .follow-up {
@@ -316,9 +312,9 @@ onBeforeUnmount(() => {
 
 .timeline-item {
   display: grid;
-  grid-template-columns: 180px 1fr;
+  grid-template-columns: 170px 1fr;
   gap: 16px;
-  padding-bottom: 18px;
+  padding-bottom: 16px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -327,12 +323,8 @@ onBeforeUnmount(() => {
   border-bottom: none;
 }
 
-.timeline-time {
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.timeline-item p {
+.timeline-item p,
+.segment-item p {
   margin: 8px 0 0;
   color: var(--muted);
   line-height: 1.7;
@@ -353,10 +345,10 @@ onBeforeUnmount(() => {
 }
 
 .transcript-full {
-  white-space: pre-wrap;
-  line-height: 1.9;
-  color: var(--text-soft);
   min-height: 320px;
+  white-space: pre-wrap;
+  color: var(--text-soft);
+  line-height: 1.85;
 }
 
 .segment-list {
@@ -364,22 +356,6 @@ onBeforeUnmount(() => {
   gap: 12px;
   max-height: 520px;
   overflow: auto;
-}
-
-.segment-item p {
-  margin: 10px 0 0;
-  line-height: 1.8;
-}
-
-.segment-item span,
-.segment-time {
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.segment-item span {
-  display: block;
-  margin-top: 10px;
 }
 
 .segment-empty {

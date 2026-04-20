@@ -1,209 +1,166 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { usageApi } from '../api/modules'
-import type { UsageOverview, UserQuota, UsageStats } from '../types'
+import { workbenchApi } from '../api/modules'
+import type { WorkbenchMonitor } from '../types'
+import TaskStatusPill from '../components/TaskStatusPill.vue'
+import { formatDateTime } from '../utils/format'
 
-const usage = ref<UsageOverview>({
-  totalCalls: 0,
-  totalTokens: 0,
-  summaryCalls: 0,
-  qaCalls: 0,
-  taskCount: 0,
-  quotaLimit: 0
-})
+const loading = ref(false)
+const monitor = ref<WorkbenchMonitor | null>(null)
+const activeStats = ref<'daily' | 'monthly'>('daily')
 
-const quota = ref<UserQuota | null>(null)
-const dailyStats = ref<UsageStats | null>(null)
-const monthlyStats = ref<UsageStats | null>(null)
-const activeTab = ref<'daily' | 'monthly'>('daily')
-
-const currentStats = computed(() => (activeTab.value === 'daily' ? dailyStats.value : monthlyStats.value))
+const currentStats = computed(() => (activeStats.value === 'daily' ? monitor.value?.dailyStats : monitor.value?.monthlyStats))
+const distributionEntries = computed(() => Object.entries(monitor.value?.statusDistribution || {}))
 
 const loadData = async () => {
-  const [overview, quotaData, daily, monthly] = await Promise.all([
-    usageApi.me(),
-    usageApi.quota(),
-    usageApi.daily(),
-    usageApi.monthly()
-  ])
-  usage.value = overview
-  quota.value = quotaData
-  dailyStats.value = daily
-  monthlyStats.value = monthly
-}
-
-const percentage = (used: number, limit: number) => {
-  if (!limit) return 0
-  return Math.min(100, Math.round((used / limit) * 100))
+  loading.value = true
+  try {
+    monitor.value = await workbenchApi.monitor()
+  } finally {
+    loading.value = false
+  }
 }
 
 onMounted(loadData)
 </script>
 
 <template>
-  <div class="page-shell usage-page">
-    <section class="usage-hero panel fade-in-up">
+  <div class="page-shell monitor-page" v-loading="loading">
+    <section class="monitor-hero panel fade-in-up">
       <div>
-        <div class="mono">COST GOVERNANCE</div>
-        <h1 class="page-title">AI 调用配额、成本与缓存收益</h1>
+        <div class="mono hero-kicker">OBSERVABILITY · COST · QUOTA</div>
+        <h1 class="page-title">任务监控与 AI 成本治理面板</h1>
         <p class="page-copy">
-          这一页聚焦“模型调用是否可控”。你可以查看用户配额、Token 消耗、费用估算、缓存命中率与成功率，完整体现项目的成本治理能力。
+          这页恢复的是删掉前那套“可讲面试亮点”的监控视图：既看任务状态和事件，也看 Token、
+          缓存命中率、成功率和配额使用。
         </p>
-      </div>
-    </section>
-
-    <section v-if="quota" class="panel quota-section">
-      <div class="section-header">
-        <div>
-          <h3 class="section-heading">用户配额</h3>
-          <p class="section-description">默认支持每日与每月双层配额控制，避免单用户过度消耗模型资源。</p>
-        </div>
-      </div>
-
-      <div class="quota-grid">
-        <div class="quota-card panel-muted">
-          <span>今日已用 / 限额</span>
-          <strong>{{ quota.todayUsed }} / {{ quota.dailyLimit }}</strong>
-          <div class="progress-bar">
-            <div class="progress-fill" :style="{ width: `${percentage(quota.todayUsed, quota.dailyLimit)}%` }" />
-          </div>
-        </div>
-        <div class="quota-card panel-muted">
-          <span>本月已用 / 限额</span>
-          <strong>{{ quota.monthUsed }} / {{ quota.monthlyLimit }}</strong>
-          <div class="progress-bar">
-            <div class="progress-fill" :style="{ width: `${percentage(quota.monthUsed, quota.monthlyLimit)}%` }" />
-          </div>
-        </div>
-        <div class="quota-card panel-muted">
-          <span>今日剩余</span>
-          <strong>{{ quota.remainingToday }}</strong>
-        </div>
-        <div class="quota-card panel-muted">
-          <span>本月剩余</span>
-          <strong>{{ quota.remainingMonth }}</strong>
-        </div>
       </div>
     </section>
 
     <section class="overview-grid">
       <div class="panel overview-card">
-        <span>总调用次数</span>
-        <strong>{{ usage.totalCalls }}</strong>
-      </div>
-      <div class="panel overview-card">
-        <span>总 Token</span>
-        <strong>{{ usage.totalTokens }}</strong>
-      </div>
-      <div class="panel overview-card">
-        <span>摘要调用</span>
-        <strong>{{ usage.summaryCalls }}</strong>
-      </div>
-      <div class="panel overview-card">
-        <span>问答调用</span>
-        <strong>{{ usage.qaCalls }}</strong>
-      </div>
-      <div class="panel overview-card">
         <span>任务总数</span>
-        <strong>{{ usage.taskCount }}</strong>
+        <strong>{{ monitor?.totalTasks || 0 }}</strong>
       </div>
       <div class="panel overview-card">
-        <span>月度配额</span>
-        <strong>{{ usage.quotaLimit }}</strong>
+        <span>处理中</span>
+        <strong>{{ monitor?.processingTasks || 0 }}</strong>
+      </div>
+      <div class="panel overview-card">
+        <span>成功任务</span>
+        <strong>{{ monitor?.successTasks || 0 }}</strong>
+      </div>
+      <div class="panel overview-card">
+        <span>失败任务</span>
+        <strong>{{ monitor?.failedTasks || 0 }}</strong>
+      </div>
+      <div class="panel overview-card">
+        <span>今日剩余配额</span>
+        <strong>{{ monitor?.quota?.remainingToday || 0 }}</strong>
+      </div>
+      <div class="panel overview-card">
+        <span>本月剩余配额</span>
+        <strong>{{ monitor?.quota?.remainingMonth || 0 }}</strong>
       </div>
     </section>
 
-    <section v-if="currentStats" class="panel stats-section">
-      <div class="section-header">
-        <div>
-          <h3 class="section-heading">详细统计</h3>
-          <p class="section-description">可以按日或按月查看业务调用分布、模型分布与费用估算。</p>
-        </div>
+    <section class="monitor-grid">
+      <div class="panel stats-panel">
+        <div class="section-header">
+          <div>
+            <h3 class="section-heading">调用统计</h3>
+            <p class="section-description">按日或按月查看 Token、费用估算、缓存命中率和成功率。</p>
+          </div>
 
-        <div class="tab-buttons">
-          <button :class="{ active: activeTab === 'daily' }" @click="activeTab = 'daily'">今日</button>
-          <button :class="{ active: activeTab === 'monthly' }" @click="activeTab = 'monthly'">本月</button>
-        </div>
-      </div>
-
-      <div class="stats-grid">
-        <div class="stat-card panel-muted">
-          <span>调用次数</span>
-          <strong>{{ currentStats.totalCalls }}</strong>
-        </div>
-        <div class="stat-card panel-muted">
-          <span>输入 Token</span>
-          <strong>{{ currentStats.totalInputTokens }}</strong>
-        </div>
-        <div class="stat-card panel-muted">
-          <span>输出 Token</span>
-          <strong>{{ currentStats.totalOutputTokens }}</strong>
-        </div>
-        <div class="stat-card panel-muted">
-          <span>费用估算</span>
-          <strong>¥{{ currentStats.estimatedCost.toFixed(4) }}</strong>
-        </div>
-        <div class="stat-card panel-muted">
-          <span>平均响应时间</span>
-          <strong>{{ currentStats.avgResponseTimeMs }} ms</strong>
-        </div>
-        <div class="stat-card panel-muted">
-          <span>缓存命中率</span>
-          <strong>{{ currentStats.cacheHitRate.toFixed(2) }}%</strong>
-        </div>
-        <div class="stat-card panel-muted">
-          <span>成功率</span>
-          <strong>{{ currentStats.successRate.toFixed(2) }}%</strong>
-        </div>
-      </div>
-
-      <div v-if="currentStats.callsByBizType" class="breakdown-grid">
-        <div class="panel-muted breakdown-card">
-          <h4>按业务类型分布</h4>
-          <div class="breakdown-list">
-            <div v-for="(count, type) in currentStats.callsByBizType" :key="type" class="breakdown-item">
-              <span>{{ type }}</span>
-              <strong>{{ count }}</strong>
-            </div>
+          <div class="tab-row">
+            <button :class="{ active: activeStats === 'daily' }" @click="activeStats = 'daily'">今日</button>
+            <button :class="{ active: activeStats === 'monthly' }" @click="activeStats = 'monthly'">本月</button>
           </div>
         </div>
 
-        <div v-if="currentStats.callsByModel" class="panel-muted breakdown-card">
-          <h4>按模型分布</h4>
-          <div class="breakdown-list">
-            <div v-for="(count, model) in currentStats.callsByModel" :key="model" class="breakdown-item">
-              <span>{{ model }}</span>
-              <strong>{{ count }}</strong>
-            </div>
+        <div v-if="currentStats" class="stats-grid">
+          <div class="panel-muted stat-card">
+            <span>调用次数</span>
+            <strong>{{ currentStats.totalCalls }}</strong>
+          </div>
+          <div class="panel-muted stat-card">
+            <span>总 Token</span>
+            <strong>{{ currentStats.totalTokens }}</strong>
+          </div>
+          <div class="panel-muted stat-card">
+            <span>费用估算</span>
+            <strong>¥{{ currentStats.estimatedCost.toFixed(4) }}</strong>
+          </div>
+          <div class="panel-muted stat-card">
+            <span>平均耗时</span>
+            <strong>{{ currentStats.avgResponseTimeMs }} ms</strong>
+          </div>
+          <div class="panel-muted stat-card">
+            <span>缓存命中率</span>
+            <strong>{{ currentStats.cacheHitRate.toFixed(2) }}%</strong>
+          </div>
+          <div class="panel-muted stat-card">
+            <span>成功率</span>
+            <strong>{{ currentStats.successRate.toFixed(2) }}%</strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel distribution-panel">
+        <div class="section-header">
+          <div>
+            <h3 class="section-heading">状态分布</h3>
+            <p class="section-description">当前样本任务在不同状态节点上的分布情况。</p>
+          </div>
+        </div>
+
+        <div class="distribution-list">
+          <div v-for="[statusCode, count] in distributionEntries" :key="statusCode" class="distribution-item panel-muted">
+            <TaskStatusPill :status-code="statusCode" />
+            <strong>{{ count }}</strong>
           </div>
         </div>
       </div>
     </section>
 
-    <section class="panel governance-section">
-      <div class="section-header">
-        <div>
-          <h3 class="section-heading">已落地的治理能力</h3>
-          <p class="section-description">这些策略共同支持高并发、防刷和模型成本控制。</p>
+    <section class="monitor-grid">
+      <div class="panel recent-task-panel">
+        <div class="section-header">
+          <div>
+            <h3 class="section-heading">最近任务</h3>
+            <p class="section-description">快速回看最新视频任务，判断当前工作台是否处于稳定状态。</p>
+          </div>
+        </div>
+
+        <div class="recent-task-list">
+          <div v-for="task in monitor?.recentTasks || []" :key="task.id" class="recent-task-item panel-muted">
+            <div class="recent-task-top">
+              <strong>{{ task.videoTitle }}</strong>
+              <TaskStatusPill :status-code="task.statusCode" />
+            </div>
+            <p>{{ task.taskNo }}</p>
+            <span>{{ task.currentStep }} · {{ task.progressPercent }}%</span>
+          </div>
         </div>
       </div>
 
-      <div class="governance-list">
-        <div class="panel-muted">
-          <strong>配额控制</strong>
-          <p>按用户维度限制每日和每月可用额度，防止资源被单点消耗。</p>
+      <div class="panel event-panel">
+        <div class="section-header">
+          <div>
+            <h3 class="section-heading">最近事件</h3>
+            <p class="section-description">用时间线回放状态流转，帮助定位失败节点与耗时瓶颈。</p>
+          </div>
         </div>
-        <div class="panel-muted">
-          <strong>缓存复用</strong>
-          <p>摘要缓存、问答缓存与常见问题复用共同降低重复调用。</p>
-        </div>
-        <div class="panel-muted">
-          <strong>重复任务拦截</strong>
-          <p>对相同文件和重复任务进行拦截，避免昂贵处理链路重复执行。</p>
-        </div>
-        <div class="panel-muted">
-          <strong>Usage 统计</strong>
-          <p>按业务类型、模型和时间维度记录 Token、耗时和成功率。</p>
+
+        <div class="event-list">
+          <div v-for="event in monitor?.recentEvents || []" :key="`${event.taskId}-${event.createTime}-${event.step}`" class="event-item">
+            <div class="mono event-time">{{ formatDateTime(event.createTime) }}</div>
+            <div>
+              <strong>{{ event.videoTitle }}</strong>
+              <p>{{ event.detail }}</p>
+              <span>{{ event.taskNo }} · {{ event.step }}</span>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -211,50 +168,47 @@ onMounted(loadData)
 </template>
 
 <style scoped>
-.usage-page {
+.monitor-page {
   gap: 20px;
 }
 
-.usage-hero,
-.quota-section,
-.stats-section,
-.governance-section,
-.overview-card {
+.monitor-hero,
+.overview-card,
+.stats-panel,
+.distribution-panel,
+.recent-task-panel,
+.event-panel {
   border-radius: 30px;
   padding: 24px;
 }
 
-.quota-grid,
+.hero-kicker {
+  color: var(--accent-strong);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+}
+
 .overview-grid,
-.stats-grid,
-.breakdown-grid,
-.governance-list {
+.monitor-grid,
+.stats-grid {
   display: grid;
   gap: 20px;
 }
 
-.quota-grid {
-  grid-template-columns: repeat(2, 1fr);
-  margin-top: 18px;
+.overview-grid {
+  grid-template-columns: repeat(3, 1fr);
 }
 
-.quota-card,
-.stat-card,
-.breakdown-card,
-.governance-list > div {
-  border-radius: 18px;
-  padding: 18px;
+.monitor-grid {
+  grid-template-columns: 1fr 1fr;
 }
 
-.quota-card span,
 .overview-card span,
-.stat-card span,
-.breakdown-item span {
+.stat-card span {
   color: var(--muted);
   font-size: 13px;
 }
 
-.quota-card strong,
 .overview-card strong,
 .stat-card strong {
   display: block;
@@ -262,92 +216,88 @@ onMounted(loadData)
   font-size: 28px;
 }
 
-.overview-grid {
-  grid-template-columns: repeat(3, 1fr);
-}
-
-.progress-bar {
-  width: 100%;
-  height: 8px;
-  margin-top: 14px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-  overflow: hidden;
-}
-
-.progress-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #ffb761, #ff8f57);
-  transition: width 0.3s ease;
-}
-
-.tab-buttons {
+.tab-row {
   display: flex;
   gap: 12px;
 }
 
-.tab-buttons button {
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--text-soft);
+.tab-row button {
   padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.76);
   cursor: pointer;
-  transition:
-    background 0.24s ease,
-    border-color 0.24s ease,
-    color 0.24s ease;
 }
 
-.tab-buttons button.active {
-  background: rgba(255, 183, 97, 0.12);
-  border-color: rgba(255, 183, 97, 0.28);
-  color: var(--accent);
+.tab-row button.active {
+  color: var(--accent-strong);
+  border-color: rgba(111, 168, 255, 0.3);
 }
 
 .stats-grid {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  margin-top: 20px;
+  margin-top: 18px;
 }
 
-.breakdown-grid,
-.governance-list {
-  grid-template-columns: 1fr 1fr;
-  margin-top: 20px;
+.stat-card,
+.distribution-item,
+.recent-task-item {
+  border-radius: 18px;
+  padding: 16px;
 }
 
-.breakdown-card h4 {
-  margin: 0 0 16px;
-  font-size: 18px;
-}
-
-.breakdown-list {
+.distribution-list,
+.recent-task-list,
+.event-list {
   display: grid;
   gap: 12px;
+  margin-top: 18px;
 }
 
-.breakdown-item {
+.distribution-item {
   display: flex;
   justify-content: space-between;
   gap: 12px;
   align-items: center;
 }
 
-.governance-list strong {
-  font-size: 17px;
+.recent-task-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
 }
 
-.governance-list p {
-  margin: 10px 0 0;
+.recent-task-item p,
+.recent-task-item span,
+.event-item p,
+.event-item span {
+  margin: 8px 0 0;
   color: var(--muted);
-  line-height: 1.7;
 }
 
-@media (max-width: 1100px) {
-  .quota-grid,
+.event-item {
+  display: grid;
+  grid-template-columns: 170px 1fr;
+  gap: 16px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.event-item:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.event-time {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (max-width: 1180px) {
   .overview-grid,
-  .breakdown-grid,
-  .governance-list {
+  .monitor-grid,
+  .event-item {
     grid-template-columns: 1fr;
   }
 }

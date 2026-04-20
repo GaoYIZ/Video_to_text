@@ -32,11 +32,16 @@ videoai:
     command: ${VIDEOAI_FFMPEG:ffmpeg}
   ai:
     mock: ${VIDEOAI_AI_MOCK:false}
+    # 阿里云 DashScope (通义千问)
     base-url: ${VIDEOAI_AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
-    api-key: ${VIDEOAI_AI_API_KEY:}
-    model: ${VIDEOAI_AI_MODEL:qwen-plus}
+    api-key: ${VIDEOAI_AI_API_KEY:sk-748be92ad75944e99dbf0ab67d202dc4}
+    model: ${VIDEOAI_AI_MODEL:qwen-max-latest}
     timeout-seconds: 60
     max-retries: 3
+    # DeepSeek 配置（备用）
+    deepseek-base-url: https://api.deepseek.com
+    deepseek-api-key: sk-839683abf9dd42cba3ba9bb4e65059d8
+    deepseek-model: deepseek-chat
   asr:
     mock: ${VIDEOAI_ASR_MOCK:false}
     max-retries: 3

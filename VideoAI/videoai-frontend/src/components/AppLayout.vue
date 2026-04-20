@@ -1,329 +1,266 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
+import {
+  House,
+  Connection,
+  ChatDotRound,
+  List,
+  Monitor,
+  Setting
+} from '@element-plus/icons-vue'
 import { useAuthStore } from '../stores/auth'
+import HomeView from '../views/HomeView.vue'
+import ConvertView from '../views/ConvertView.vue'
+import ChatView from '../views/ChatView.vue'
+import TaskListView from '../views/TaskListView.vue'
+import MonitorView from '../views/MonitorView.vue'
 
-const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const activeTab = ref('home')
 
-const menus = [
-  {
-    label: '总览',
-    path: '/dashboard',
-    icon: 'DataAnalysis',
-    caption: '系统状态与最新任务'
-  },
-  {
-    label: '上传中心',
-    path: '/upload',
-    icon: 'UploadFilled',
-    caption: '分片上传与任务投递'
-  },
-  {
-    label: '任务列表',
-    path: '/tasks',
-    icon: 'Tickets',
-    caption: '状态机、失败诊断、结果回看'
-  },
-  {
-    label: '使用统计',
-    path: '/usage',
-    icon: 'PieChart',
-    caption: '配额、成本与缓存收益'
-  }
+const navItems = [
+  { id: 'home', label: '主页概览', icon: House },
+  { id: 'convert', label: '转换工作区', icon: Connection },
+  { id: 'chat', label: 'AI 聊天', icon: ChatDotRound },
+  { id: 'tasks', label: '任务列表', icon: List },
+  { id: 'monitor', label: '系统监控', icon: Monitor }
 ]
 
-const currentMenu = computed(() => menus.find((item) => route.path.startsWith(item.path)))
-const currentTitle = computed(() => (route.meta.title as string) || currentMenu.value?.label || 'VideoAI')
-const currentDescription = computed(
-  () => (route.meta.description as string) || currentMenu.value?.caption || 'AI 视频解析与问答工作台'
-)
-const currentUserLabel = computed(() => authStore.user?.nickname || authStore.user?.username || '未登录')
+const currentLabel = computed(() => {
+  const item = navItems.find(i => i.id === activeTab.value)
+  return item?.label || ''
+})
 
 const handleLogout = () => {
   authStore.logout()
   router.push('/login')
 }
+
+const switchTab = (tabId: string) => {
+  activeTab.value = tabId
+}
 </script>
 
 <template>
-  <div class="layout">
-    <aside class="sidebar panel fade-in">
-      <div class="sidebar-top">
-        <div class="brand">
-          <div class="brand-mark">VA</div>
-          <div>
-            <div class="brand-kicker mono">AI VIDEO ANALYSIS WORKBENCH</div>
-            <h1>VideoAI</h1>
-            <p>面向长视频解析、结构化理解与多轮问答的工程化平台。</p>
-          </div>
+  <div class="app-container">
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+      <div class="brand-header">
+        <div class="brand-icon">
+          <el-icon :size="20"><ArrowRightLeft /></el-icon>
         </div>
-
-        <nav class="nav">
-          <button
-            v-for="item in menus"
-            :key="item.path"
-            :class="['nav-item', { active: route.path.startsWith(item.path) }]"
-            @click="router.push(item.path)"
-          >
-            <el-icon size="18"><component :is="item.icon" /></el-icon>
-            <div>
-              <strong>{{ item.label }}</strong>
-              <span>{{ item.caption }}</span>
-            </div>
-          </button>
-        </nav>
+        <span class="brand-name">AutoScribe</span>
       </div>
 
-      <div class="sidebar-bottom">
-        <div class="operator panel-muted">
-          <div class="operator-row">
-            <span class="mono">当前用户</span>
-            <span class="status-live">
-              <span class="status-dot" style="color: var(--success)" />
-              在线
-            </span>
-          </div>
-          <strong>{{ currentUserLabel }}</strong>
-          <span>{{ authStore.user?.userNo || '等待分配用户编号' }}</span>
-        </div>
+      <nav class="nav-menu">
+        <button
+          v-for="item in navItems"
+          :key="item.id"
+          :class="['nav-item', { active: activeTab === item.id }]"
+          @click="switchTab(item.id)"
+        >
+          <el-icon :size="16" :class="{ 'text-white': activeTab === item.id }">
+            <component :is="item.icon" />
+          </el-icon>
+          <span>{{ item.label }}</span>
+        </button>
+      </nav>
 
-        <div class="mini-board panel-muted">
-          <div>
-            <span class="mono">处理链路</span>
-            <strong>Upload → MQ → ASR → Summary → RAG → Agent</strong>
-          </div>
+      <div class="sidebar-footer">
+        <div class="user-info">
+          <span class="username">{{ authStore.user?.nickname || authStore.user?.username }}</span>
+          <el-button link size="small" @click="handleLogout">退出</el-button>
         </div>
-
-        <el-button plain @click="handleLogout">退出登录</el-button>
       </div>
     </aside>
 
-    <main class="workspace">
-      <header class="topbar fade-in-up">
-        <div>
-          <div class="topbar-meta mono">VIDEO UNDERSTANDING · TOOL CALLING · OBSERVABILITY</div>
-          <h2>{{ currentTitle }}</h2>
-          <p>{{ currentDescription }}</p>
-        </div>
-
-        <div class="topbar-side">
-          <div class="readiness panel-muted">
-            <span class="status-dot" style="color: var(--success)" />
-            <span>工作台已就绪</span>
-          </div>
-          <el-button type="warning" @click="router.push('/upload')">上传新视频</el-button>
+    <!-- 主内容区 -->
+    <main class="main-content">
+      <header class="top-header">
+        <div class="header-title">{{ currentLabel }}</div>
+        <div class="header-actions">
+          <el-tag type="success" effect="plain" size="small">Gemini 2.5 Flash Online</el-tag>
+          <el-icon :size="20" class="settings-icon"><Setting /></el-icon>
         </div>
       </header>
 
-      <router-view />
+      <div class="content-area">
+        <HomeView v-if="activeTab === 'home'" @navigate="switchTab" />
+        <ConvertView v-else-if="activeTab === 'convert'" />
+        <ChatView v-else-if="activeTab === 'chat'" />
+        <TaskListView v-else-if="activeTab === 'tasks'" />
+        <MonitorView v-else-if="activeTab === 'monitor'" />
+      </div>
     </main>
   </div>
 </template>
 
 <style scoped>
-.layout {
-  min-height: 100vh;
-  display: grid;
-  grid-template-columns: 320px 1fr;
+.app-container {
+  display: flex;
+  height: 100vh;
+  background: #FBFBFE;
+  color: #1e293b;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 
+/* 侧边栏 */
 .sidebar {
-  margin: 18px;
-  border-radius: var(--radius-xl);
-  padding: 24px;
-  display: grid;
-  gap: 28px;
+  width: 256px;
+  background: white;
+  border-right: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  z-index: 20;
 }
 
-.sidebar-top,
-.sidebar-bottom {
-  display: grid;
-  gap: 22px;
+.brand-header {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  border-bottom: 1px solid #f1f5f9;
 }
 
-.brand {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 16px;
-  align-items: start;
+.brand-icon {
+  width: 32px;
+  height: 32px;
+  background: #4f46e5;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12px;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.15);
 }
 
-.brand-mark {
-  width: 62px;
-  height: 62px;
-  border-radius: 18px;
-  display: grid;
-  place-items: center;
-  font-size: 24px;
-  font-weight: 800;
-  color: #1c1307;
-  background: linear-gradient(145deg, #ffd59a 0%, #ffb761 58%, #ff9254 100%);
-  box-shadow: 0 16px 40px rgba(255, 166, 81, 0.28);
+.brand-icon .el-icon {
+  color: white;
 }
 
-.brand-kicker,
-.operator span,
-.topbar-meta {
-  color: var(--muted);
-  font-size: 11px;
-  letter-spacing: 0.12em;
+.brand-name {
+  font-weight: bold;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+  font-style: italic;
 }
 
-.brand h1 {
-  margin: 0;
-  font-size: 36px;
-  letter-spacing: -0.06em;
-}
-
-.brand p {
-  margin: 8px 0 0;
-  color: var(--muted);
-  line-height: 1.7;
-}
-
-.nav {
-  display: grid;
-  gap: 10px;
+.nav-menu {
+  flex: 1;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .nav-item {
   width: 100%;
-  border: 1px solid transparent;
-  border-radius: 18px;
-  background: transparent;
-  color: var(--text);
-  padding: 14px 15px;
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 12px;
-  align-items: start;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    transform 0.24s ease,
-    background 0.24s ease,
-    border-color 0.24s ease;
-}
-
-.nav-item strong {
-  display: block;
-  font-size: 15px;
-}
-
-.nav-item span {
-  display: block;
-  margin-top: 4px;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.5;
-}
-
-.nav-item:hover,
-.nav-item.active {
-  transform: translateX(4px);
-  background: rgba(255, 255, 255, 0.05);
-  border-color: var(--line);
-}
-
-.operator,
-.mini-board {
-  border-radius: 18px;
-  padding: 16px;
-  display: grid;
-  gap: 8px;
-}
-
-.operator strong,
-.mini-board strong {
-  font-size: 16px;
-}
-
-.operator-row {
   display: flex;
-  justify-content: space-between;
-  gap: 12px;
   align-items: center;
-}
-
-.status-live {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--text-soft);
-}
-
-.workspace {
-  padding: 24px 24px 24px 0;
-}
-
-.topbar {
-  padding: 10px 4px 0;
-  display: flex;
-  justify-content: space-between;
-  gap: 18px;
-  align-items: flex-start;
-}
-
-.topbar h2 {
-  margin: 10px 0 0;
-  font-size: clamp(34px, 4vw, 52px);
-  letter-spacing: -0.06em;
-}
-
-.topbar p {
-  margin: 10px 0 0;
-  max-width: 620px;
-  color: var(--muted);
-  line-height: 1.7;
-}
-
-.topbar-side {
-  display: grid;
-  gap: 12px;
-  justify-items: end;
-}
-
-.readiness {
-  border-radius: 999px;
   padding: 12px 16px;
-  display: inline-flex;
+  border-radius: 12px;
+  transition: all 0.2s;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  gap: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.nav-item:hover {
+  background: #f8fafc;
+}
+
+.nav-item.active {
+  background: #4f46e5;
+  color: white;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3);
+}
+
+.nav-item.active .el-icon {
+  color: white;
+}
+
+.sidebar-footer {
+  padding: 16px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.user-info {
+  display: flex;
   align-items: center;
-  gap: 10px;
-  color: var(--text-soft);
+  justify-content: space-between;
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 10px;
 }
 
-@media (max-width: 1180px) {
-  .layout {
-    grid-template-columns: 1fr;
-  }
+.username {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1e293b;
+}
 
+/* 主内容区 */
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.top-header {
+  height: 64px;
+  background: white;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  flex-shrink: 0;
+}
+
+.header-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.settings-icon {
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.settings-icon:hover {
+  color: #4f46e5;
+}
+
+.content-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px;
+}
+
+@media (max-width: 768px) {
   .sidebar {
-    margin: 18px 18px 0;
+    width: 200px;
   }
-
-  .workspace {
-    padding: 18px;
-  }
-
-  .topbar {
-    display: grid;
-  }
-
-  .topbar-side {
-    justify-items: start;
-  }
-}
-
-@media (max-width: 720px) {
-  .brand {
-    grid-template-columns: 1fr;
-  }
-
-  .brand-mark {
-    width: 56px;
-    height: 56px;
+  
+  .content-area {
+    padding: 20px;
   }
 }
 </style>

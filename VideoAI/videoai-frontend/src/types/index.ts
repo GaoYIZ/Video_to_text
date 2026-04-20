@@ -127,6 +127,55 @@ export interface UsageStats {
   callsByModel?: Record<string, number>
 }
 
+export interface WorkbenchOverview {
+  usageOverview: UsageOverview
+  quota: UserQuota
+  processingTasks: number
+  completedTasks: number
+  failedTasks: number
+  recentTasks: TaskItem[]
+}
+
+export interface MonitorEvent {
+  taskId: number
+  taskNo: string
+  videoTitle: string
+  step: string
+  eventType: string
+  success: number
+  detail: string
+  createTime: string
+}
+
+export interface WorkbenchMonitor {
+  totalTasks: number
+  processingTasks: number
+  successTasks: number
+  failedTasks: number
+  statusDistribution: Record<string, number>
+  quota: UserQuota
+  dailyStats: UsageStats
+  monthlyStats: UsageStats
+  recentTasks: TaskItem[]
+  recentEvents: MonitorEvent[]
+}
+
+export interface WorkbenchConvertResult {
+  accepted: boolean
+  message: string
+  task?: TaskItem
+}
+
+export interface WorkbenchAiActionResult {
+  action: string
+  taskId: number
+  sessionId?: string
+  answer?: string
+  summary?: string
+  highlights?: string[]
+  citedSegments?: TranscriptSegment[]
+}
+
 export interface PageResult<T> {
   total: number
   current: number

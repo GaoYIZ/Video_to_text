@@ -18,7 +18,7 @@ const submit = async () => {
   try {
     const result = await userApi.register(form)
     authStore.setLogin(result)
-    router.push('/dashboard')
+    router.push('/')
   } finally {
     loading.value = false
   }
@@ -27,34 +27,36 @@ const submit = async () => {
 
 <template>
   <div class="auth-page">
-    <section class="auth-poster">
-      <div class="poster-inner fade-in-up">
-        <div class="poster-label mono">CREATE VIDEOAI ACCOUNT</div>
-        <h1>创建演示账号</h1>
-        <p>注册后即可完整体验视频上传、解析任务追踪、结构化摘要、片段检索与多轮问答链路。</p>
+    <section class="auth-visual">
+      <div class="visual-card fade-in-up">
+        <div class="mono visual-kicker">CREATE YOUR WORKSPACE</div>
+        <h1>注册账号</h1>
+        <p>
+          创建新账号后，你可以完整体验视频上传、任务状态机、结构化摘要、片段检索和多轮问答整条链路。
+        </p>
 
-        <div class="poster-list">
+        <div class="visual-steps">
           <div>
             <strong>1. 上传视频</strong>
-            <span>前端自动分片、计算 MD5，支持断点续传与秒传。</span>
+            <span>前端自动分片、计算 MD5，并支持断点续传和秒传。</span>
           </div>
           <div>
-            <strong>2. 跟踪任务</strong>
-            <span>任务状态机与事件日志帮助快速定位失败节点。</span>
+            <strong>2. 查看任务</strong>
+            <span>任务进入异步处理链路，状态机和事件日志持续可见。</span>
           </div>
           <div>
-            <strong>3. 开始问答</strong>
-            <span>基于 RAG 与 Agent 工具调用，面向视频内容持续追问。</span>
+            <strong>3. 发起问答</strong>
+            <span>使用 RAG 检索与 Agent 工具调用围绕单个视频持续追问。</span>
           </div>
         </div>
       </div>
     </section>
 
-    <section class="auth-panel panel fade-in">
-      <div class="auth-head">
-        <div class="mono">注册账号</div>
-        <h2>创建新的使用者身份</h2>
-        <p>建议使用清晰的用户名与昵称，方便后续查看配额和任务归属。</p>
+    <section class="auth-form panel fade-in">
+      <div>
+        <div class="mono form-kicker">CREATE ACCOUNT</div>
+        <h2>创建新的 VideoAI 用户</h2>
+        <p>建议使用易识别的用户名和昵称，方便后续查看任务和配额归属。</p>
       </div>
 
       <el-form label-position="top">
@@ -68,9 +70,9 @@ const submit = async () => {
           <el-input v-model="form.password" type="password" show-password placeholder="建议至少 6 位" />
         </el-form-item>
 
-        <div class="action-group">
-          <el-button type="warning" :loading="loading" class="full-btn" @click="submit">注册并进入</el-button>
-          <el-button plain class="full-btn" @click="router.push('/login')">返回登录</el-button>
+        <div class="form-actions">
+          <el-button type="warning" class="full-width" :loading="loading" @click="submit">注册并进入</el-button>
+          <el-button plain class="full-width" @click="router.push('/login')">返回登录</el-button>
         </div>
       </el-form>
     </section>
@@ -81,96 +83,95 @@ const submit = async () => {
 .auth-page {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 1.05fr 0.95fr;
+  grid-template-columns: 1fr 1fr;
 }
 
-.auth-poster {
-  padding: 42px;
+.auth-visual {
+  padding: 28px;
 }
 
-.poster-inner {
+.visual-card {
   height: 100%;
   border-radius: 36px;
-  padding: 48px;
-  display: grid;
-  align-content: space-between;
-  background:
-    radial-gradient(circle at top left, rgba(114, 182, 255, 0.18), transparent 24%),
-    linear-gradient(180deg, rgba(17, 31, 52, 0.94), rgba(7, 15, 28, 0.98));
+  padding: 42px;
   border: 1px solid var(--line);
+  background:
+    radial-gradient(circle at top left, rgba(173, 229, 210, 0.52), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(242, 249, 246, 0.88));
   box-shadow: var(--shadow-lg);
+  display: grid;
+  gap: 22px;
+  align-content: space-between;
 }
 
-.poster-label {
+.visual-kicker,
+.form-kicker {
   color: var(--muted);
   font-size: 12px;
   letter-spacing: 0.12em;
 }
 
-.poster-inner h1 {
-  margin: 18px 0 0;
-  font-size: clamp(48px, 7vw, 90px);
-  line-height: 1;
-  letter-spacing: -0.07em;
+.visual-card h1 {
+  margin: 0;
+  font-size: clamp(56px, 8vw, 92px);
+  line-height: 0.98;
+  letter-spacing: -0.08em;
 }
 
-.poster-inner p {
-  margin: 14px 0 0;
+.visual-card p {
+  margin: 0;
   color: var(--text-soft);
   line-height: 1.8;
-  max-width: 640px;
 }
 
-.poster-list {
+.visual-steps {
   display: grid;
   gap: 16px;
 }
 
-.poster-list div {
-  padding: 18px 0 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+.visual-steps div {
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
 }
 
-.poster-list strong {
+.visual-steps strong {
   display: block;
-  font-size: 18px;
 }
 
-.poster-list span {
+.visual-steps span {
   display: block;
   margin-top: 8px;
   color: var(--muted);
   line-height: 1.7;
 }
 
-.auth-panel {
-  margin: 42px 42px 42px 0;
+.auth-form {
+  margin: 28px 28px 28px 0;
   border-radius: 32px;
-  padding: 42px;
+  padding: 40px;
   display: grid;
   align-content: center;
   gap: 28px;
 }
 
-.auth-head h2 {
+.auth-form h2 {
   margin: 10px 0 0;
-  font-size: 36px;
+  font-size: 38px;
   letter-spacing: -0.05em;
 }
 
-.auth-head p {
+.auth-form p {
   margin: 10px 0 0;
   color: var(--muted);
   line-height: 1.7;
 }
 
-.action-group {
+.form-actions {
   display: grid;
   gap: 12px;
-  margin-top: 8px;
 }
 
-.full-btn {
+.full-width {
   width: 100%;
 }
 
@@ -179,16 +180,16 @@ const submit = async () => {
     grid-template-columns: 1fr;
   }
 
-  .auth-poster {
+  .auth-visual {
     padding: 20px 20px 0;
   }
 
-  .poster-inner,
-  .auth-panel {
+  .visual-card,
+  .auth-form {
     padding: 28px;
   }
 
-  .auth-panel {
+  .auth-form {
     margin: 20px;
   }
 }

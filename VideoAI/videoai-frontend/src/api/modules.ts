@@ -13,7 +13,11 @@ import type {
   UsageOverview,
   UserQuota,
   UsageStats,
-  UserInfo
+  UserInfo,
+  WorkbenchAiActionResult,
+  WorkbenchConvertResult,
+  WorkbenchMonitor,
+  WorkbenchOverview
 } from '../types'
 
 export const userApi = {
@@ -80,4 +84,15 @@ export const usageApi = {
   stats: (period: string = 'day') => http.get<any, UsageStats>('/api/usage/stats', { params: { period } }),
   daily: () => http.get<any, UsageStats>('/api/usage/daily'),
   monthly: () => http.get<any, UsageStats>('/api/usage/monthly')
+}
+
+export const workbenchApi = {
+  overview: () => http.get<any, WorkbenchOverview>('/api/workbench/overview'),
+  monitor: () => http.get<any, WorkbenchMonitor>('/api/workbench/monitor'),
+  convertFile: (data: { uploadId: string; sessionId?: string }) =>
+    http.post<any, WorkbenchConvertResult>('/api/workbench/convert/file', data),
+  convertLink: (data: { sourceUrl: string; title?: string }) =>
+    http.post<any, WorkbenchConvertResult>('/api/workbench/convert/link', data),
+  aiAction: (data: { taskId: number; action: string; question?: string; sessionId?: string }) =>
+    http.post<any, WorkbenchAiActionResult>('/api/workbench/ai/action', data)
 }
